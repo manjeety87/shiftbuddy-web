@@ -1,26 +1,476 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+ * Themes. Same recipe as the mobile app (ShiftBuddy/constants/themes.ts): a warm
+ * off-white or warm charcoal page, plain cards, soft borders, one muted accent.
+ * Each theme is an accent with a light and a dark side (`data-mode`).
+ * Token names follow shadcn/ui, so its components pick these up when added.
+ *
+ * The light sides are the phone's colours taken a step darker, same hue: text in
+ * `--muted-foreground`, `--primary`, `--success`, `--destructive` and `--info`
+ * reads at 4.5:1 or better on the page colour, and so does white on `--primary`.
+ * `--faint` (3:1) is for what isn't read: chevrons, disabled things, rules.
+ */
+:root,
+[data-theme="sunsamaFocus"] {
+  color-scheme: light;
+  --background: #f4f1ea;
+  --foreground: #2b2a25;
+  --card: #ffffff;
+  --muted: #e8e3d8;
+  --muted-foreground: #6f6d63;
+  --faint: #8d8a7f;
+  --primary: #527558;
+  --primary-soft: #6b8f71;
+  --primary-foreground: #ffffff;
+  --success: #4b784b;
+  --warning: #c99a3a;
+  --destructive: #aa4f42;
+  --info: #457484;
+}
+
+[data-theme="clayStudio"] {
+  color-scheme: light;
+  --background: #f6f0e9;
+  --foreground: #2e2823;
+  --card: #ffffff;
+  --muted: #ece3d8;
+  --muted-foreground: #776b5f;
+  --faint: #93887c;
+  --primary: #a25a3d;
+  --primary-soft: #b0674a;
+  --primary-foreground: #ffffff;
+  --success: #567646;
+  --warning: #c9973e;
+  --destructive: #ad4d39;
+  --info: #4d7284;
+}
+
+[data-theme="harborMist"] {
+  color-scheme: light;
+  --background: #f0f2f0;
+  --foreground: #232a2d;
+  --card: #ffffff;
+  --muted: #e0e5e2;
+  --muted-foreground: #646f73;
+  --faint: #838c8f;
+  --primary: #4d728c;
+  --primary-soft: #557a95;
+  --primary-foreground: #ffffff;
+  --success: #4a775c;
+  --warning: #c29a45;
+  --destructive: #a75149;
+  --info: #4d728c;
+}
+
+[data-theme="lavenderDusk"] {
+  color-scheme: light;
+  --background: #f3f0f2;
+  --foreground: #2a252d;
+  --card: #ffffff;
+  --muted: #e6e0e5;
+  --muted-foreground: #736a79;
+  --faint: #8f8794;
+  --primary: #7d6197;
+  --primary-soft: #866aa0;
+  --primary-foreground: #ffffff;
+  --success: #507658;
+  --warning: #c3984a;
+  --destructive: #a74f59;
+  --info: #517091;
+}
+
+/*
+ * After dark. Every theme has a dark side: the same accent, lifted so it still
+ * reads, on a charcoal tinted the way that theme's paper is. `data-mode` sits on
+ * the same element as `data-theme` (<html>, and each preview in the picker).
+ */
+[data-theme="sunsamaFocus"][data-mode="dark"] {
+  color-scheme: dark;
+  --background: #1b1a17;
+  --foreground: #ede9df;
+  --card: #262420;
+  /* Lighter than its track, so the chosen segment still reads as the raised one after dark */
+  --raised: #4a463e;
+  --muted: #36332d;
+  --muted-foreground: #ada899;
+  --faint: #7a766b;
+  --primary: #8db393;
+  --primary-soft: #a7c7ac;
+  --primary-foreground: #1b1a17;
+  --success: #86b886;
+  --warning: #d9b064;
+  --destructive: #d98273;
+  --info: #86afbd;
+}
+
+[data-theme="clayStudio"][data-mode="dark"] {
+  color-scheme: dark;
+  --background: #1d1917;
+  --foreground: #efe7df;
+  --card: #292320;
+  --raised: #4d443e;
+  --muted: #39312c;
+  --muted-foreground: #b3a699;
+  --faint: #80746a;
+  --primary: #d08e72;
+  --primary-soft: #dfa88f;
+  --primary-foreground: #1d1917;
+  --success: #93b883;
+  --warning: #d9ae62;
+  --destructive: #dd8370;
+  --info: #88adbd;
+}
+
+[data-theme="harborMist"][data-mode="dark"] {
+  color-scheme: dark;
+  --background: #171a1c;
+  --foreground: #e4e9ea;
+  --card: #212628;
+  --raised: #414a4e;
+  --muted: #2f3639;
+  --muted-foreground: #a0abaf;
+  --faint: #6e797d;
+  --primary: #86abc6;
+  --primary-soft: #a2c0d6;
+  --primary-foreground: #171a1c;
+  --success: #88b89a;
+  --warning: #d6b166;
+  --destructive: #db8880;
+  --info: #86abc6;
+}
+
+[data-theme="lavenderDusk"][data-mode="dark"] {
+  color-scheme: dark;
+  --background: #1b181d;
+  --foreground: #ebe5ee;
+  --card: #262229;
+  --raised: #49424e;
+  --muted: #353038;
+  --muted-foreground: #ada3b3;
+  --faint: #7a7180;
+  --primary: #b49acb;
+  --primary-soft: #c7b2da;
+  --primary-foreground: #1b181d;
+  --success: #8cb894;
+  --warning: #d8b06a;
+  --destructive: #dc8690;
+  --info: #8fabc8;
+}
+
+/*
+ * Derived surfaces. Declared on every themed element (not only :root) so a nested
+ * [data-theme] preview recomputes them from its own colours.
+ */
+:root,
+[data-theme] {
+  /* A hairline that works on any surface: the text colour, mostly transparent */
+  --line: color-mix(in oklab, var(--foreground) 11%, transparent);
+  --line-strong: color-mix(in oklab, var(--foreground) 18%, transparent);
+  /* The sidebar is the heavier material: it separates structure from content */
+  --sidebar: color-mix(in oklab, var(--background) 62%, var(--muted));
+  --hover: color-mix(in oklab, var(--foreground) 5%, transparent);
+  --pressed: color-mix(in oklab, var(--foreground) 9%, transparent);
+  /* A filled button under the pointer moves toward the text colour: darker by day, lighter after dark — its label gains contrast either way */
+  --primary-hover: color-mix(in oklab, var(--primary) 86%, var(--foreground));
+  /* Amber and red as words (on a tint, or small): the fill colours alone are too light to read */
+  --warning-ink: color-mix(in oklab, var(--warning) 45%, var(--foreground));
+  --destructive-ink: color-mix(in oklab, var(--destructive) 70%, var(--foreground));
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--foreground);
+  --color-raised: var(--raised, var(--card));
+  --color-sidebar: var(--sidebar);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-faint: var(--faint);
+  --color-border: var(--line);
+  --color-border-strong: var(--line-strong);
+  --color-hover: var(--hover);
+  --color-pressed: var(--pressed);
+  --color-primary: var(--primary);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-hover: var(--primary-hover);
+  --color-warning-ink: var(--warning-ink);
+  --color-destructive-ink: var(--destructive-ink);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-ring: var(--primary);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-destructive: var(--destructive);
+  --color-info: var(--info);
+
+  /* The platform's own UI face first (San Francisco on Apple devices), Inter elsewhere */
+  --font-sans: -apple-system, BlinkMacSystemFont, var(--font-inter), "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+
+  /* Depth: bigger surfaces read as thicker. The first layer is the hairline edge. */
+  --shadow-card: 0 0 0 1px var(--line), 0 1px 2px rgb(0 0 0 / 0.04);
+  --shadow-pop: 0 0 0 1px var(--line), 0 10px 28px -8px rgb(0 0 0 / 0.18), 0 2px 6px rgb(0 0 0 / 0.06);
+  --shadow-modal: 0 0 0 1px var(--line), 0 28px 70px -14px rgb(0 0 0 / 0.32), 0 10px 24px -10px rgb(0 0 0 / 0.14);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+@theme {
+  /* The browser's ease-out is too weak to read as a response; this one starts fast */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /*
+   * Type scale. Tracking and leading belong to the size: large text is set tighter
+   * with tight leading, small text slightly open. Never one letter-spacing for all.
+   */
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1.3;
+  --text-2xs--letter-spacing: 0.012em;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.35;
+  --text-xs--letter-spacing: 0.004em;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.45;
+  --text-sm--letter-spacing: -0.003em;
+  --text-base: 0.9375rem;
+  --text-base--line-height: 1.5;
+  --text-base--letter-spacing: -0.009em;
+  --text-lg: 1.0625rem;
+  --text-lg--line-height: 1.4;
+  --text-lg--letter-spacing: -0.014em;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.3;
+  --text-xl--letter-spacing: -0.017em;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 1.2;
+  --text-2xl--letter-spacing: -0.02em;
+  --text-3xl: 1.75rem;
+  --text-3xl--line-height: 1.15;
+  --text-3xl--letter-spacing: -0.022em;
+  --text-4xl: 2.25rem;
+  --text-4xl--line-height: 1.08;
+  --text-4xl--letter-spacing: -0.025em;
+  --text-5xl: 3rem;
+  --text-5xl--line-height: 1.04;
+  --text-5xl--letter-spacing: -0.028em;
+}
+
+html {
+  font-optical-sizing: auto;
+  -webkit-text-size-adjust: 100%;
+  /* The page bar is sticky: a focused field or a jumped-to heading must land below it, not under it */
+  scroll-padding-top: 5.5rem;
+  /* Every control has its own pressed state; the grey flash on top of it is noise */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* No 300ms wait and no double-tap zoom on things that are pressed */
+a,
+button,
+label,
+select,
+input,
+textarea,
+[role="button"] {
+  touch-action: manipulation;
+}
+
+/*
+ * A native select with our own arrow: the browser's sits at a different inset in
+ * every engine. The list itself stays native (the right control on a phone).
+ */
+.select-arrow {
+  appearance: none;
+  padding-right: 2rem;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted-foreground) 50%), linear-gradient(135deg, var(--muted-foreground) 50%, transparent 50%);
+  background-position:
+    right 0.95rem center,
+    right 0.65rem center;
+  background-size: 0.3rem 0.3rem;
+  background-repeat: no-repeat;
+  text-overflow: ellipsis;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  letter-spacing: -0.009em;
+  font-feature-settings: "cv11", "ss03", "calt";
+}
+
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--primary) 28%, transparent);
+}
+
+/* A content surface: the card colour with a hairline edge instead of a border */
+@utility surface {
+  background: var(--card);
+  border-radius: 0.875rem;
+  box-shadow: 0 0 0 1px var(--line), 0 1px 2px rgb(0 0 0 / 0.04);
+}
+
+/* Something that can be clicked inside a surface. Hover only where there is a real pointer. */
+@utility row-hover {
+  transition: background-color 120ms ease;
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      background: var(--hover);
+    }
+  }
+  &:active {
+    background: var(--pressed);
+  }
+}
+
+/*
+ * Reduced motion keeps colour and opacity changes (they explain state) and drops
+ * movement. Where something sits is left alone — a switch's thumb still has to be
+ * on the side that says "on" — it just gets there without travelling.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scale: 1 !important;
+    transition-property: color, background-color, border-color, outline-color, box-shadow, opacity !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/*
+ * Panels. On a phone a sheet rises from the bottom edge and leaves the same way.
+ * With a pointer it is a window in the middle of the page: it materialises (a small
+ * scale plus opacity) because nothing on a desktop is anchored to a screen edge.
+ * Opening is slower than closing — the system answers fast.
+ */
+.modal-panel {
+  transform: translateY(100%);
+  transition: transform 220ms var(--ease-drawer);
+}
+.modal-panel-shown {
+  transform: none;
+  transition-duration: 380ms;
+}
+@media (min-width: 48rem) {
+  .modal-panel {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+    transition:
+      transform 150ms var(--ease-out),
+      opacity 150ms var(--ease-out);
+  }
+  .modal-panel-shown {
+    opacity: 1;
+    transform: none;
+    transition-duration: 220ms;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .modal-panel {
+    transform: none;
+    opacity: 0;
+    transition: opacity 180ms ease;
+  }
+  .modal-panel-shown {
+    opacity: 1;
+  }
+}
+
+/*
+ * The page bar gains its edge only once content has scrolled under it — a scroll
+ * edge, not a permanent divider. Browsers without scroll timelines keep it plain.
+ */
+@supports (animation-timeline: scroll()) {
+  .scroll-edge {
+    animation: scroll-edge linear both;
+    animation-timeline: scroll(root);
+    animation-range: 0 40px;
+  }
+  @keyframes scroll-edge {
+    from {
+      border-bottom-color: transparent;
+      background-color: transparent;
+    }
+  }
+}
+
+/* Translucent chrome turns solid for people who asked for less transparency, or more contrast */
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .frosted {
+    background: var(--background) !important;
+    backdrop-filter: none !important;
+    animation: none !important;
+    border-bottom-color: var(--line-strong) !important;
+  }
+}
+
+/*
+ * Glass: the lightest material, for what floats above a panel (a calendar, a list
+ * of times, the search, a menu). Translucent with a strong blur so the page shows
+ * through as colour, a bright top edge where light catches it, and a deeper shadow
+ * than a card because it sits higher. Never stacked on another glass surface.
+ */
+.glass {
+  /* Mostly opaque: what is written on it must stay readable even where the blur isn't drawn */
+  background: color-mix(in oklab, var(--raised, var(--card)) 94%, transparent);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border-radius: 1rem;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.22),
+    0 0 0 1px var(--line),
+    0 20px 48px -14px rgb(0 0 0 / 0.32),
+    0 4px 12px rgb(0 0 0 / 0.08);
+}
+[popover].glass {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  overflow: hidden;
+  /* It materialises out of its trigger (the origin is set where it opens) */
+  transition:
+    opacity 160ms var(--ease-out),
+    transform 160ms var(--ease-out);
+}
+@starting-style {
+  [popover].glass:popover-open {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [popover].glass {
+    transition: opacity 160ms ease;
+    transform: none !important;
+  }
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .glass {
+    background: var(--card);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+/* A field in a table cell reads as plain text until it is pointed at, focused or open */
+.quiet-field:not(:hover, :focus-visible, [aria-expanded="true"]) {
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Leaflet draws its own controls; keep them in the calm family */
+.leaflet-container {
+  font: inherit;
+  background: var(--muted);
+  border-radius: 0.75rem;
 }

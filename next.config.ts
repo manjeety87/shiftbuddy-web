@@ -1,16 +1,24 @@
 import type { NextConfig } from "next";
 
+// The browser only ever talks to this site; `/api/*` is forwarded to the backend.
+// That keeps the refresh cookie first-party (browsers block third-party cookies).
+const API_URL = process.env.API_URL ?? "http://localhost:5000";
+
 const nextConfig: NextConfig = {
-  /* config options here */
   cacheComponents: true,
   partialPrefetching: true,
   turbopack: {
+    // This folder is the whole project (there is another lockfile higher up the disk)
+    root: process.cwd(),
     rules: {
       "*.css": {
         loaders: ["@tailwindcss/turbopack"],
         as: "*.css",
       },
     },
+  },
+  async rewrites() {
+    return [{ source: "/api/:path*", destination: `${API_URL}/api/:path*` }];
   },
 };
 
