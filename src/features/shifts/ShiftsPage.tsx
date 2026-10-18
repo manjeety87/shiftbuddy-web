@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { selectClass } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Checkbox, SelectionHeader } from "@/components/ui/SelectionHeader";
+import { Checkbox, SelectButton, SelectionHeader } from "@/components/ui/SelectionHeader";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { LoadError, SkeletonRows } from "@/components/ui/States";
 import type { Shift } from "@/interfaces/shift.d";
@@ -150,6 +150,7 @@ export function ShiftsPage() {
               <Button variant="secondary" aria-label="Pay summary" icon={<DollarSign aria-hidden className="size-4" />} onClick={() => openSheet({ kind: "paySummary" })}>
                 <span className="hidden sm:inline">Pay</span>
               </Button>
+              {shown.length > 0 && <SelectButton onClick={() => setSelecting(true)} />}
               {/* The empty state below already offers Scan and Add; no need to say it twice */}
               {!showsEmptyState && (
                 <>
@@ -192,12 +193,6 @@ export function ShiftsPage() {
             <p className="text-sm text-muted-foreground tabular-nums">
               {shown.length} shift{shown.length === 1 ? "" : "s"} · {formatDuration(totalMinutes)}
             </p>
-            {/* Touch screens can also press and hold a row; ✕ in the header ends selecting */}
-            {!selecting && (
-              <Button variant="quiet" size="sm" onClick={() => setSelecting(true)}>
-                Select
-              </Button>
-            )}
           </div>
         )}
       </div>

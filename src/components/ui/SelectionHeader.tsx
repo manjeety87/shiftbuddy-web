@@ -1,5 +1,6 @@
-import { Check, X } from "lucide-react";
+import { Check, ListChecks, X } from "lucide-react";
 import type { ReactNode } from "react";
+import { Button } from "./Button";
 
 /**
  * Stands in for a page's header while rows are being picked, as on the phone
@@ -30,6 +31,14 @@ export function SelectionHeader({ count, onDone, children }: { count: number; on
       <div className="flex shrink-0 items-center gap-1.5">{children}</div>
     </header>
   );
+}
+
+/**
+ * Starts selecting. The same icon in the same place on every list (the page
+ * header, before Add), so it is learnt once. Touch screens can also press and hold a row.
+ */
+export function SelectButton({ onClick }: { onClick: () => void }) {
+  return <Button variant="secondary" aria-label="Select" title="Select" icon={<ListChecks aria-hidden className="size-4" />} onClick={onClick} />;
 }
 
 /** The tick box at the end of a row while selecting. Decorative: the row itself is the checkbox. */

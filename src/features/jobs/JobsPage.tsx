@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Checkbox, SelectionHeader } from "@/components/ui/SelectionHeader";
+import { Checkbox, SelectButton, SelectionHeader } from "@/components/ui/SelectionHeader";
 import { LoadError, SkeletonRows } from "@/components/ui/States";
 import type { Job } from "@/interfaces/job.d";
 import { showAlert } from "@/lib/dialog";
@@ -141,10 +141,7 @@ export function JobsPage() {
           actions={
             jobs && jobs.length > 0 ? (
               <>
-                {/* Touch screens can also press and hold a card */}
-                <Button variant="quiet" onClick={() => setSelecting(true)}>
-                  Select
-                </Button>
+                <SelectButton onClick={() => setSelecting(true)} />
                 <Button aria-label="Add a job" icon={<Plus aria-hidden className="size-4" />} onClick={addJob}>
                   <span className="hidden sm:inline">Add Job</span>
                 </Button>
