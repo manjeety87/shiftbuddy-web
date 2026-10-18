@@ -165,7 +165,8 @@ export function SharingPage() {
 
   return (
     <>
-      <PageHeader title="Sharing" description="Send a snapshot of your week, or let someone see your schedule as it changes." />
+      {/* A phone reaches this page from Settings (no room for it in the tab bar) */}
+      <PageHeader title="Sharing" description="Send a snapshot of your week, or let someone see your schedule as it changes." back={{ label: "Settings", href: "/settings" }} />
 
       <ScheduleMessageCard />
 

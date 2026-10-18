@@ -57,7 +57,7 @@ export function WelcomeSheet({ onClose }: { onClose: () => void }) {
             aria-label={`Show step ${dot + 1}`}
             onClick={() => setIndex(dot)}
             // The dot is small to look at; the button around it is big enough to tap
-            className="flex h-6 items-center px-1"
+            className="flex h-6 min-w-6 items-center justify-center px-1"
           >
             <span aria-hidden className={`h-1.5 rounded-full transition-[width,background-color] duration-200 ease-out ${dot === index ? "w-5 bg-primary" : "w-1.5 bg-border-strong"}`} />
           </button>

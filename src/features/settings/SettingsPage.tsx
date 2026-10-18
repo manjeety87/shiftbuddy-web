@@ -1,6 +1,6 @@
 "use client";
 
-import { BadgeCheck, ChevronLeft, ChevronRight, ClipboardList, House, LayoutDashboard, Lock, LogOut, MailWarning, Palette, Percent, Trash2, User as UserIcon, Users, type LucideIcon } from "lucide-react";
+import { BadgeCheck, ChevronRight, ClipboardList, House, LayoutDashboard, Lock, LogOut, MailWarning, Palette, Percent, Trash2, User as UserIcon, Users, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useState, useSyncExternalStore, type FormEvent, type ReactNode } from "react";
 import { ThemePicker } from "@/components/theme/ThemePicker";
@@ -15,7 +15,7 @@ import { ARRIVAL_BUFFER_OPTIONS } from "@/lib/commute";
 import { showAlert } from "@/lib/dialog";
 import { splitAddress } from "@/lib/geocode";
 import { notify } from "@/lib/notify";
-import { setPreference, usePreference } from "@/lib/preferences";
+import { setPreference, useIsWide, usePreference } from "@/lib/preferences";
 import { useLogOut, useSession, useUser } from "@/lib/session";
 import { openSheet, type SheetRequest } from "@/lib/sheets";
 
@@ -24,14 +24,17 @@ const COMMUTE_MODES = [
   { value: "DRIVING", label: "Driving" },
 ] as const;
 
+// `label` names the section on a wide screen; `screen` is its name on a phone, the same
+// words as its row in the menu and its title once open (as the phone app's Settings)
 const SECTIONS = [
-  { id: "profile", label: "Profile" },
-  { id: "commute", label: "Home & commute" },
-  { id: "pay", label: "Pay estimates" },
-  { id: "home", label: "Home page" },
-  { id: "appearance", label: "Appearance" },
-  { id: "account", label: "Account" },
+  { id: "profile", label: "Profile", screen: "Edit Profile" },
+  { id: "commute", label: "Home & commute", screen: "Home & Commute" },
+  { id: "pay", label: "Pay estimates", screen: "Tax Deduction" },
+  { id: "home", label: "Home page", screen: "Home Page" },
+  { id: "appearance", label: "Appearance", screen: "Appearance" },
+  { id: "account", label: "Account", screen: "Account" },
 ] as const;
+const screenName = (id: SectionId) => SECTIONS.find((section) => section.id === id)?.screen ?? "";
 
 type SectionId = (typeof SECTIONS)[number]["id"];
 
@@ -44,7 +47,7 @@ const useOpenSection = () => {
   const hash = useSyncExternalStore(subscribeToHash, () => window.location.hash.slice(1), () => "");
   return SECTIONS.find((section) => section.id === hash)?.id ?? null;
 };
-// Set when a menu row opened the section, so "‹ Settings" can go back instead of adding a step
+// Set when a menu row opened the section, so ‹ can go back instead of adding a step
 let openedFromMenu = false;
 
 function Section({ id, title, description, open, children }: { id: SectionId; title: string; description?: string; open: SectionId | null; children: ReactNode }) {
@@ -52,7 +55,8 @@ function Section({ id, title, description, open, children }: { id: SectionId; ti
     // scroll-mt keeps the heading clear of the page bar when the section nav jumps here.
     // A phone shows one section at a time, as the phone app's Settings opens one screen per row.
     <section aria-labelledby={`${id}-title`} id={id} className={`mb-9 scroll-mt-24 ${open === id ? "" : "max-md:hidden"}`}>
-      <h2 id={`${id}-title`} className="text-lg font-semibold">
+      {/* On a phone the page bar already names the open section */}
+      <h2 id={`${id}-title`} className="text-lg font-semibold max-md:hidden">
         {title}
       </h2>
       {description && <p className="mt-0.5 text-sm text-pretty text-muted-foreground">{description}</p>}
@@ -131,7 +135,7 @@ export function SettingsPage() {
   const [saving, setSaving] = useState<"name" | "tax" | null>(null);
   const showShared = usePreference("sharedOnHome") === "on";
   const open = useOpenSection();
-  const openTitle = SECTIONS.find((section) => section.id === open)?.label;
+  const isWide = useIsWide();
 
   const backToMenu = () => {
     if (openedFromMenu) window.history.back();
@@ -194,16 +198,11 @@ export function SettingsPage() {
 
   return (
     <>
-      <PageHeader title="Settings" />
+      {/* A phone with a section open shows it as its own screen: ‹ and its name, like every screen opened from Settings */}
+      <PageHeader title={open && !isWide ? screenName(open) : "Settings"} back={open ? { label: "Settings", onClick: backToMenu } : undefined} />
 
       {/* Phone: the phone app's Settings — who you are, then one row per screen */}
-      {open ? (
-        <button type="button" onClick={backToMenu} className="-mt-2 mb-3 -ml-1 flex min-h-10 items-center gap-1 px-1 text-sm font-medium text-primary md:hidden">
-          <ChevronLeft aria-hidden className="size-4" />
-          Settings
-          <span className="sr-only">, leave {openTitle}</span>
-        </button>
-      ) : (
+      {!open && (
         <div className="md:hidden">
           <div className="surface mb-5 flex items-center gap-3 p-4">
             <span aria-hidden className="flex size-13 shrink-0 items-center justify-center rounded-full bg-primary/15 text-lg font-bold text-primary">
@@ -221,13 +220,13 @@ export function SettingsPage() {
           </div>
 
           <nav aria-label="Settings" className="surface mb-5 divide-y divide-border overflow-hidden">
-            <MenuRow icon={UserIcon} label="Edit Profile" href="#profile" />
-            <MenuRow icon={House} label="Home & Commute" href="#commute" />
+            <MenuRow icon={UserIcon} label={screenName("profile")} href="#profile" />
+            <MenuRow icon={House} label={screenName("commute")} href="#commute" />
             <MenuRow icon={ClipboardList} label="Timesheet" href="/timesheet" />
             <MenuRow icon={Users} label="Sharing" href="/sharing" />
-            <MenuRow icon={Palette} label="Appearance" href="#appearance" />
-            <MenuRow icon={Percent} label="Tax Deduction (Estimate)" detail={`${user.taxDeductionPercent}%`} href="#pay" />
-            <MenuRow icon={LayoutDashboard} label="Home Page" href="#home" />
+            <MenuRow icon={Palette} label={screenName("appearance")} href="#appearance" />
+            <MenuRow icon={Percent} label={screenName("pay")} detail={`${user.taxDeductionPercent}%`} href="#pay" />
+            <MenuRow icon={LayoutDashboard} label={screenName("home")} href="#home" />
             {user.hasPassword && <MenuRow icon={Lock} label="Change Password" onClick={() => openSheet({ kind: "password" })} />}
           </nav>
 

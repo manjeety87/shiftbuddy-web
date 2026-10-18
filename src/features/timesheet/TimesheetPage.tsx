@@ -61,6 +61,8 @@ export function TimesheetPage() {
       <PageHeader
         title="Timesheet"
         description="The hours you actually worked, for checking against your pay."
+        // A phone reaches this page from Settings (no room for it in the tab bar)
+        back={{ label: "Settings", href: "/settings" }}
         actions={
           hasNoJobs ? undefined : (
             <Button aria-label="Add hours" icon={<Plus aria-hidden className="size-4" />} onClick={addHours}>

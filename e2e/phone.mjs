@@ -160,6 +160,12 @@ try {
     await page.waitForLoadState("networkidle");
     await look("shifts past", { whole: true });
   });
+  // Screens a phone opens from Settings lead back to it from the page bar, like the phone app
+  await step("back to settings", async () => {
+    await open("timesheet");
+    await tappable(page.getByRole("link", { name: "Back to Settings" })).click();
+    await page.waitForURL("**/settings");
+  });
   await step("timesheet one job", async () => {
     await open("timesheet");
     await page.getByRole("combobox", { name: "Show" }).selectOption({ index: 1 });
@@ -268,7 +274,7 @@ try {
     await panel("home address", () => tappable(page.getByRole("button", { name: "Change", exact: true })).click());
     await page.keyboard.press("Escape");
     await page.waitForTimeout(400);
-    await tappable(page.getByRole("button", { name: /^Settings/ })).click();
+    await tappable(page.getByRole("button", { name: "Back to Settings" })).click();
     await page.waitForURL(/\/settings$/);
     await page.keyboard.press("Escape");
     await page.waitForTimeout(400);
