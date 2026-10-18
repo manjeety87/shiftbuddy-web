@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { jobName, jobRole } from "@/lib/jobLabels";
 import { useLogOut } from "@/lib/session";
-import { openSheet } from "@/lib/sheets";
+import { openNewShift, openSheet } from "@/lib/sheets";
 import { THEMES } from "@/lib/themes";
 import { useMyJobs } from "@/lib/useMyJobs";
 import { setTheme } from "../theme/useTheme";
@@ -42,7 +42,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
 
   const commands = useMemo<Command[]>(
     () => [
-      { id: "new-shift", group: "Actions", label: "New shift", icon: Plus, run: () => openSheet({ kind: "shift" }) },
+      { id: "new-shift", group: "Actions", label: "New shift", icon: Plus, run: openNewShift },
       { id: "scan", group: "Actions", label: "Scan a schedule photo", icon: ScanLine, run: () => openSheet({ kind: "scan" }) },
       { id: "new-job", group: "Actions", label: "New job", icon: BriefcaseBusiness, run: () => openSheet({ kind: "job" }) },
       { id: "hours", group: "Actions", label: "Add hours worked", icon: ClipboardPen, run: () => openSheet({ kind: "timeEntry" }) },

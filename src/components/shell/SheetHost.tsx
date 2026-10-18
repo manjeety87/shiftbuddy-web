@@ -1,12 +1,15 @@
 "use client";
 
 import { RouteSheet } from "@/features/commute/RouteSheet";
+import { WelcomeSheet } from "@/features/home/WelcomeSheet";
 import { ConflictSheet } from "@/features/conflicts/ConflictSheet";
 import { JobSheet } from "@/features/jobs/JobSheet";
 import { ScanSheet } from "@/features/scan/ScanSheet";
 import { HomeAddressSheet, PasswordSheet, VerifyEmailSheet } from "@/features/settings/AccountSheets";
 import { SharedSheet } from "@/features/sharing/SharedSheet";
 import { CopySheet } from "@/features/shifts/CopySheet";
+import { CopyWeekSheet } from "@/features/shifts/CopyWeekSheet";
+import { PaySummarySheet } from "@/features/shifts/PaySummarySheet";
 import { ShiftSheet } from "@/features/shifts/ShiftSheet";
 import { TimeEntrySheet } from "@/features/timesheet/TimeEntrySheet";
 import { WeatherSheet } from "@/features/weather/WeatherSheet";
@@ -22,12 +25,18 @@ const render = (request: SheetRequest, onClose: () => void) => {
       return <TimeEntrySheet entryId={request.entryId} shiftId={request.shiftId} jobId={request.jobId} onClose={onClose} />;
     case "copy":
       return <CopySheet shiftIds={request.shiftIds} onClose={onClose} />;
+    case "copyWeek":
+      return <CopyWeekSheet shifts={request.shifts} weekStart={request.weekStart} onClose={onClose} />;
     case "route":
       return <RouteSheet shiftId={request.shiftId} onClose={onClose} />;
     case "weather":
       return <WeatherSheet shiftId={request.shiftId} onClose={onClose} />;
     case "conflict":
       return <ConflictSheet conflict={request.conflict} fromId={request.fromId} toId={request.toId} onClose={onClose} />;
+    case "welcome":
+      return <WelcomeSheet onClose={onClose} />;
+    case "paySummary":
+      return <PaySummarySheet onClose={onClose} />;
     case "scan":
       return <ScanSheet onClose={onClose} />;
     case "shared":

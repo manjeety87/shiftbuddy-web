@@ -7,14 +7,16 @@ import { PeriodSummary } from "@/components/PeriodSummary";
 import { isHappeningNow, ShiftList, ShiftRow, shortTime } from "@/components/ShiftRow";
 import { Button } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { LoadError, SkeletonRows } from "@/components/ui/States";
 import type { Shift } from "@/interfaces/shift.d";
-import { isSameDay, toCalendarDateString } from "@/lib/dateUtils";
+import { getWeekDays, isSameDay, toCalendarDateString } from "@/lib/dateUtils";
 import { addDays, formatDayLabel, startOfDay } from "@/lib/inputs";
 import { jobName } from "@/lib/jobLabels";
 import { useShiftsChanged } from "@/lib/shiftEvents";
+import { useIsWide } from "@/lib/preferences";
 import { getMyShifts } from "@/lib/shifts";
-import { openSheet } from "@/lib/sheets";
+import { openSheet, usePickedDay } from "@/lib/sheets";
 import { useFetch } from "@/lib/useFetch";
 import { useNow } from "@/lib/useNow";
 
@@ -22,15 +24,34 @@ const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 /** How many shifts a day cell names before it says "+2 more" */
 const CELL_SHIFTS = 2;
 
+// The phone app's Calendar: a month, or one week when the month is too much to read
+const VIEWS = [
+  { value: "month", label: "Month" },
+  { value: "week", label: "Week" },
+] as const;
+const SUMMARY_PERIODS = [
+  { value: "week", label: "Week" },
+  { value: "month", label: "Month" },
+] as const;
+
+const shortDate = (date: Date) => date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
 export function CalendarPage() {
   const now = useNow();
   const grid = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState(() => startOfDay(new Date()));
+  usePickedDay(selected);
+  // Week view is a phone thing, like the app; a wide screen always has room for the month
+  const [phoneView, setPhoneView] = useState<"month" | "week">("month");
+  const view = useIsWide() ? "month" : phoneView;
+  const [summaryPeriod, setSummaryPeriod] = useState<"week" | "month">("month");
 
   const monthStart = new Date(selected.getFullYear(), selected.getMonth(), 1);
   const monthEnd = new Date(selected.getFullYear(), selected.getMonth() + 1, 1);
-  const gridStart = addDays(monthStart, -monthStart.getDay());
-  const weeks = Math.ceil((monthStart.getDay() + new Date(selected.getFullYear(), selected.getMonth() + 1, 0).getDate()) / 7);
+  const weekStart = getWeekDays(selected)[0];
+  const weekEnd = addDays(weekStart, 7);
+  const gridStart = view === "week" ? weekStart : addDays(monthStart, -monthStart.getDay());
+  const weeks = view === "week" ? 1 : Math.ceil((monthStart.getDay() + new Date(selected.getFullYear(), selected.getMonth() + 1, 0).getDate()) / 7);
   const cells = Array.from({ length: weeks * 7 }, (_, index) => addDays(gridStart, index));
   const gridEnd = addDays(gridStart, weeks * 7);
 
@@ -49,6 +70,7 @@ export function CalendarPage() {
   const dayShifts = data?.filter((shift) => Date.parse(shift.startTime) < dayEnd && Date.parse(shift.endTime) > dayStart) ?? [];
   const monthName = monthStart.toLocaleDateString("en-US", { month: "long" });
   const isThisMonth = monthStart.getMonth() === new Date(now).getMonth() && monthStart.getFullYear() === new Date(now).getFullYear();
+  const isThisWeek = isSameDay(weekStart, getWeekDays(new Date(now))[0]);
 
   const move = (days: number) => {
     setSelected((day) => addDays(day, days));
@@ -64,15 +86,19 @@ export function CalendarPage() {
   };
 
   const stepMonth = (months: number) => setSelected(new Date(selected.getFullYear(), selected.getMonth() + months, 1));
+  const step = (direction: 1 | -1) => (view === "week" ? setSelected((day) => addDays(day, direction * 7)) : stepMonth(direction));
 
   return (
     <>
       <PageHeader
         title="Calendar"
         actions={
-          <Button aria-label="Add a shift" icon={<Plus aria-hidden className="size-4" />} onClick={() => openSheet({ kind: "shift", date: selected })}>
-            <span className="hidden sm:inline">Add Shift</span>
-          </Button>
+          <>
+            <SegmentedControl label="Calendar view" options={VIEWS} value={phoneView} onChange={setPhoneView} className="w-32 md:hidden" />
+            <Button aria-label="Add a shift" className="md:hidden" icon={<Plus aria-hidden className="size-4" />} onClick={() => openSheet({ kind: "shift", date: selected })}>
+              <span className="hidden sm:inline">Add Shift</span>
+            </Button>
+          </>
         }
       />
 
@@ -81,10 +107,10 @@ export function CalendarPage() {
         <div>
           <PeriodNav
             className="mb-3"
-            label={monthStart.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-            onPrevious={() => stepMonth(-1)}
-            onNext={() => stepMonth(1)}
-            onToday={isThisMonth ? undefined : () => setSelected(startOfDay(new Date()))}
+            label={view === "week" ? `${shortDate(weekStart)} – ${shortDate(addDays(weekStart, 6))}` : monthStart.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+            onPrevious={() => step(-1)}
+            onNext={() => step(1)}
+            onToday={(view === "week" ? isThisWeek : isThisMonth) ? undefined : () => setSelected(startOfDay(new Date()))}
           />
 
           <div className="surface overflow-hidden">
@@ -100,7 +126,7 @@ export function CalendarPage() {
               {cells.map((day) => {
                 const isOn = isSameDay(day, selected);
                 const isToday = isSameDay(day, new Date(now));
-                const inMonth = day.getMonth() === monthStart.getMonth();
+                const inMonth = view === "week" || day.getMonth() === monthStart.getMonth();
                 const shifts = byDay.get(toCalendarDateString(day.toISOString())) ?? [];
                 const colours = [...new Set(shifts.map((shift) => shift.job.color))];
                 return (
@@ -150,14 +176,7 @@ export function CalendarPage() {
 
         <div className="flex min-w-0 flex-col gap-7 xl:sticky xl:top-24">
           <section aria-label="Selected day">
-            <div className="mb-2.5 flex items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold">{formatDayLabel(selected, new Date(now))}</h2>
-              {dayEnd > now && dayShifts.length > 0 && (
-                <Button variant="ghost" size="sm" icon={<Plus aria-hidden className="size-3.5" />} onClick={() => openSheet({ kind: "shift", date: selected })}>
-                  Add
-                </Button>
-              )}
-            </div>
+            <h2 className="mb-2.5 text-sm font-semibold">{formatDayLabel(selected, new Date(now))}</h2>
             {error ? (
               <LoadError message={error} onRetry={retry} />
             ) : data === null ? (
@@ -165,11 +184,6 @@ export function CalendarPage() {
             ) : dayShifts.length === 0 ? (
               <div className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-border-strong px-4 py-4">
                 <p className="flex-1 text-sm text-muted-foreground">{dayEnd <= now ? "You had no shifts that day." : "Nothing on this day yet."}</p>
-                {dayEnd > now && (
-                  <Button variant="secondary" size="sm" icon={<Plus aria-hidden className="size-3.5" />} onClick={() => openSheet({ kind: "shift", date: selected })}>
-                    Add Shift
-                  </Button>
-                )}
               </div>
             ) : (
               <ShiftList>
@@ -180,7 +194,12 @@ export function CalendarPage() {
             )}
           </section>
 
-          <PeriodSummary from={monthStart} to={monthEnd} title={`${monthName} in numbers`} />
+          <PeriodSummary
+            from={summaryPeriod === "week" ? weekStart : monthStart}
+            to={summaryPeriod === "week" ? weekEnd : monthEnd}
+            title={summaryPeriod === "week" ? (isThisWeek ? "This week in numbers" : `Week of ${shortDate(weekStart)}`) : `${monthName} in numbers`}
+            action={<SegmentedControl label="Summary period" options={SUMMARY_PERIODS} value={summaryPeriod} onChange={setSummaryPeriod} className="w-32" />}
+          />
         </div>
       </div>
     </>

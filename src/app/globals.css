@@ -173,6 +173,9 @@
   --pressed: color-mix(in oklab, var(--foreground) 9%, transparent);
   /* A filled button under the pointer moves toward the text colour: darker by day, lighter after dark — its label gains contrast either way */
   --primary-hover: color-mix(in oklab, var(--primary) 86%, var(--foreground));
+  /* A well inside a primary-filled card: a step deeper, so its text keeps (and gains) contrast in both modes */
+  --primary-well: color-mix(in oklab, var(--primary) 84%, var(--foreground));
+  --primary-well-hover: color-mix(in oklab, var(--primary) 74%, var(--foreground));
   /* Amber and red as words (on a tint, or small): the fill colours alone are too light to read */
   --warning-ink: color-mix(in oklab, var(--warning) 45%, var(--foreground));
   --destructive-ink: color-mix(in oklab, var(--destructive) 70%, var(--foreground));
@@ -195,6 +198,8 @@
   --color-primary: var(--primary);
   --color-primary-soft: var(--primary-soft);
   --color-primary-hover: var(--primary-hover);
+  --color-primary-well: var(--primary-well);
+  --color-primary-well-hover: var(--primary-well-hover);
   --color-warning-ink: var(--warning-ink);
   --color-destructive-ink: var(--destructive-ink);
   --color-primary-foreground: var(--primary-foreground);

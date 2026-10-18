@@ -121,6 +121,16 @@ try {
   // A week with something in every part of the app: on the clock now, a clash, hours worked, someone sharing
   token = (await api("post", "/auth/register", { name: "Phone Tester With A Fairly Long Name", email, password: "Testing123" })).accessToken;
   await context.addCookies([{ name: "sb_signed_in", value: "1", url: BASE }]);
+
+  // A brand-new account: the welcome slides once, then Home's "Getting started" card
+  await step("welcome", async () => {
+    await page.goto(`${BASE}/home`);
+    await sheet().waitFor();
+    await look("panel welcome");
+    await page.keyboard.press("Escape");
+    await page.getByRole("heading", { name: "Getting started" }).waitFor();
+    await look("home getting started", { whole: true });
+  });
   await api("put", "/auth/home", { address: "100 Queen St W, Toronto, ON M5H 2N2", latitude: 43.6532, longitude: -79.3832 });
   const near = await api("post", "/jobs", { title: "Sales Associate and Keyholder", companyName: "International Clothiers Yorkdale", hourlyRate: 18.5, latitude: 43.7254, longitude: -79.4522, location: "Yorkdale Shopping Centre, 3401 Dufferin St, Toronto", payFrequency: "BIWEEKLY", payday: at(24 * 6).slice(0, 10) });
   const far = await api("post", "/jobs", { title: "Cashier", companyName: "Fairweather", latitude: 43.7765, longitude: -79.2578, location: "Scarborough Town Centre, Toronto" });
@@ -155,6 +165,30 @@ try {
     await page.getByRole("combobox", { name: "Show" }).selectOption({ index: 1 });
     await page.waitForLoadState("networkidle");
     await look("timesheet one job", { whole: true });
+  });
+  // Picking several, as on the phone app: Select (or press and hold), then the header acts on them
+  await step("shifts select", async () => {
+    await open("shifts");
+    await tappable(page.getByRole("button", { name: "Select", exact: true })).click();
+    await tappable(page.getByRole("checkbox").filter({ hasText: "Fairweather" })).click();
+    await page.getByRole("toolbar", { name: "Selected" }).waitFor();
+    await look("shifts selecting", { whole: true });
+    await panel("copy several", () => tappable(page.getByRole("button", { name: "Copy selected shifts" })).click());
+  });
+  await step("jobs select", async () => {
+    await open("jobs");
+    await tappable(page.getByRole("button", { name: "Select", exact: true })).click();
+    await tappable(page.getByRole("button", { name: "Select all" })).click();
+    await look("jobs selecting");
+  });
+  await step("calendar week", async () => {
+    await open("calendar");
+    await page.getByRole("radio", { name: "Week" }).first().check({ force: true });
+    await look("calendar week", { whole: true });
+  });
+  await step("panel pay summary", async () => {
+    await open("shifts");
+    await panel("pay summary", () => tappable(page.getByRole("button", { name: "Pay summary" })).click());
   });
   await step("calendar another day", async () => {
     await open("calendar");
@@ -227,16 +261,24 @@ try {
   });
   await step("panels from settings", async () => {
     await open("settings");
-    await panel("home address", () => tappable(page.getByRole("button", { name: "Change" })).click());
+    // A phone's Settings is a menu, like the phone app: each row opens one section
+    await tappable(page.getByRole("link", { name: "Home & Commute" })).click();
+    await page.waitForURL("**/settings#commute");
+    await look("settings section", { whole: true });
+    await panel("home address", () => tappable(page.getByRole("button", { name: "Change", exact: true })).click());
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(400);
+    await tappable(page.getByRole("button", { name: /^Settings/ })).click();
+    await page.waitForURL(/\/settings$/);
     await page.keyboard.press("Escape");
     await page.waitForTimeout(400);
     await panel("password", () => tappable(page.getByRole("button", { name: "Change Password" })).click());
     await page.keyboard.press("Escape");
     await page.waitForTimeout(400);
-    await panel("verify email", () => tappable(page.getByRole("button", { name: "Verify Email" })).click());
+    await panel("verify email", () => tappable(page.getByRole("button", { name: "Verify email" })).click());
     await page.keyboard.press("Escape");
     await page.waitForTimeout(400);
-    await tappable(page.getByRole("button", { name: "Log out" })).click();
+    await tappable(page.getByRole("button", { name: "Log Out" })).click();
     await page.getByRole("alertdialog").waitFor();
     await look("log out question");
     await page.getByRole("button", { name: "Cancel" }).click();

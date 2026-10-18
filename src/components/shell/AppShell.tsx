@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { useSession } from "@/lib/session";
-import { closeAllSheets, openSheet } from "@/lib/sheets";
+import { closeAllSheets, openNewShift } from "@/lib/sheets";
 import { LoadError } from "../ui/States";
 import { BottomNav } from "./BottomNav";
 import { CommandPalette } from "./CommandPalette";
@@ -37,7 +37,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       const typing = target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
       if (key !== "n" || event.metaKey || event.ctrlKey || event.altKey || typing || document.querySelector("dialog[open]")) return;
       event.preventDefault();
-      openSheet({ kind: "shift" });
+      openNewShift();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

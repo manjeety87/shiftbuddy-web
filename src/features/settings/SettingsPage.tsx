@@ -1,8 +1,8 @@
 "use client";
 
-import { BadgeCheck, ChevronRight, ClipboardList, Users, type LucideIcon } from "lucide-react";
+import { BadgeCheck, ChevronLeft, ChevronRight, ClipboardList, House, LayoutDashboard, Lock, LogOut, MailWarning, Palette, Percent, Trash2, User as UserIcon, Users, type LucideIcon } from "lucide-react";
 import Link from "next/link";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useState, useSyncExternalStore, type FormEvent, type ReactNode } from "react";
 import { ThemePicker } from "@/components/theme/ThemePicker";
 import { Button } from "@/components/ui/Button";
 import { inputClass } from "@/components/ui/Field";
@@ -33,10 +33,25 @@ const SECTIONS = [
   { id: "account", label: "Account" },
 ] as const;
 
-function Section({ id, title, description, children }: { id: string; title: string; description?: string; children: ReactNode }) {
+type SectionId = (typeof SECTIONS)[number]["id"];
+
+// The section a phone has open, from the address (#commute): the browser's Back returns to the menu
+const subscribeToHash = (onChange: () => void) => {
+  window.addEventListener("hashchange", onChange);
+  return () => window.removeEventListener("hashchange", onChange);
+};
+const useOpenSection = () => {
+  const hash = useSyncExternalStore(subscribeToHash, () => window.location.hash.slice(1), () => "");
+  return SECTIONS.find((section) => section.id === hash)?.id ?? null;
+};
+// Set when a menu row opened the section, so "‹ Settings" can go back instead of adding a step
+let openedFromMenu = false;
+
+function Section({ id, title, description, open, children }: { id: SectionId; title: string; description?: string; open: SectionId | null; children: ReactNode }) {
   return (
-    // scroll-mt keeps the heading clear of the page bar when the section nav jumps here
-    <section aria-labelledby={`${id}-title`} id={id} className="mb-9 scroll-mt-24">
+    // scroll-mt keeps the heading clear of the page bar when the section nav jumps here.
+    // A phone shows one section at a time, as the phone app's Settings opens one screen per row.
+    <section aria-labelledby={`${id}-title`} id={id} className={`mb-9 scroll-mt-24 ${open === id ? "" : "max-md:hidden"}`}>
       <h2 id={`${id}-title`} className="text-lg font-semibold">
         {title}
       </h2>
@@ -65,16 +80,47 @@ function Setting({ label, help, htmlFor, children }: { label: string; help?: Rea
   );
 }
 
-function PhoneLink({ icon: Icon, label, detail, href }: { icon: LucideIcon; label: string; detail: string; href: string }) {
-  return (
-    <Link href={href} className="flex min-h-13 items-center gap-3 px-4 py-2.5 text-sm row-hover">
-      <Icon aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+const menuRow = "flex min-h-13 w-full items-center gap-3 px-4 py-2.5 text-left text-sm row-hover";
+
+/** A row of the phone menu: a section of this page (#id), another page, or a panel. */
+function MenuRow({ icon: Icon, label, detail, href, onClick }: { icon: LucideIcon; label: string; detail?: string; href?: string; onClick?: () => void }) {
+  const content = (
+    <>
+      <Icon aria-hidden className="size-4.5 shrink-0 text-muted-foreground" />
       <span className="min-w-0 flex-1 truncate font-medium">{label}</span>
-      <span className="truncate text-muted-foreground">{detail}</span>
+      {detail && <span className="truncate text-muted-foreground">{detail}</span>}
       <ChevronRight aria-hidden className="size-4 shrink-0 text-faint" />
+    </>
+  );
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={menuRow}>
+        {content}
+      </button>
+    );
+  }
+  if (href?.startsWith("#")) {
+    return (
+      <a href={href} onClick={() => (openedFromMenu = true)} className={menuRow}>
+        {content}
+      </a>
+    );
+  }
+  return (
+    <Link href={href ?? "/settings"} className={menuRow}>
+      {content}
     </Link>
   );
 }
+
+const initials = (name: string) =>
+  name
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
 
 export function SettingsPage() {
   const user = useUser();
@@ -84,6 +130,14 @@ export function SettingsPage() {
   const [tax, setTax] = useState(String(user.taxDeductionPercent));
   const [saving, setSaving] = useState<"name" | "tax" | null>(null);
   const showShared = usePreference("sharedOnHome") === "on";
+  const open = useOpenSection();
+  const openTitle = SECTIONS.find((section) => section.id === open)?.label;
+
+  const backToMenu = () => {
+    if (openedFromMenu) window.history.back();
+    else window.location.hash = "";
+    openedFromMenu = false;
+  };
 
   // Settings apply as they're chosen; only free text needs a Save. The choice shows
   // at once (a control that waits for the server feels broken) and goes back if the save fails.
@@ -142,6 +196,50 @@ export function SettingsPage() {
     <>
       <PageHeader title="Settings" />
 
+      {/* Phone: the phone app's Settings — who you are, then one row per screen */}
+      {open ? (
+        <button type="button" onClick={backToMenu} className="-mt-2 mb-3 -ml-1 flex min-h-10 items-center gap-1 px-1 text-sm font-medium text-primary md:hidden">
+          <ChevronLeft aria-hidden className="size-4" />
+          Settings
+          <span className="sr-only">, leave {openTitle}</span>
+        </button>
+      ) : (
+        <div className="md:hidden">
+          <div className="surface mb-5 flex items-center gap-3 p-4">
+            <span aria-hidden className="flex size-13 shrink-0 items-center justify-center rounded-full bg-primary/15 text-lg font-bold text-primary">
+              {initials(user.name)}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-base font-semibold">{user.name}</p>
+              <p className="truncate text-sm text-muted-foreground">{user.email}</p>
+              {!user.isEmailVerified && (
+                <button type="button" onClick={verify} className="mt-1.5 flex items-center gap-1 rounded-full bg-warning/15 px-2.5 py-1 text-xs font-semibold text-warning-ink">
+                  <MailWarning aria-hidden className="size-3.5" /> Verify email
+                </button>
+              )}
+            </div>
+          </div>
+
+          <nav aria-label="Settings" className="surface mb-5 divide-y divide-border overflow-hidden">
+            <MenuRow icon={UserIcon} label="Edit Profile" href="#profile" />
+            <MenuRow icon={House} label="Home & Commute" href="#commute" />
+            <MenuRow icon={ClipboardList} label="Timesheet" href="/timesheet" />
+            <MenuRow icon={Users} label="Sharing" href="/sharing" />
+            <MenuRow icon={Palette} label="Appearance" href="#appearance" />
+            <MenuRow icon={Percent} label="Tax Deduction (Estimate)" detail={`${user.taxDeductionPercent}%`} href="#pay" />
+            <MenuRow icon={LayoutDashboard} label="Home Page" href="#home" />
+            {user.hasPassword && <MenuRow icon={Lock} label="Change Password" onClick={() => openSheet({ kind: "password" })} />}
+          </nav>
+
+          <Button variant="danger" className="w-full shadow-[0_0_0_1px_color-mix(in_oklab,var(--destructive)_35%,transparent)]" icon={<LogOut aria-hidden className="size-4" />} onClick={logOut}>
+            Log Out
+          </Button>
+          <button type="button" onClick={removeAccount} className="mx-auto mt-3 mb-4 flex min-h-11 items-center gap-1.5 px-3 text-sm font-medium text-muted-foreground">
+            <Trash2 aria-hidden className="size-4" /> Delete Account
+          </button>
+        </div>
+      )}
+
       <div className="grid items-start gap-10 lg:grid-cols-[11rem_minmax(0,44rem)]">
         {/* With room, the sections are listed beside the page; a phone just scrolls */}
         <nav aria-label="Settings sections" className="sticky top-24 hidden flex-col gap-0.5 lg:flex">
@@ -153,7 +251,7 @@ export function SettingsPage() {
         </nav>
 
         <div className="min-w-0">
-          <Section id="profile" title="Profile">
+          <Section id="profile" title="Profile" open={open}>
             <form onSubmit={saveName}>
               <Setting label="Name" htmlFor="settings-name" help="Shown to people you share your schedule with.">
                 <input id="settings-name" autoComplete="name" maxLength={100} value={name} onChange={(event) => setName(event.target.value)} className={`${inputClass} sm:w-56`} />
@@ -176,7 +274,7 @@ export function SettingsPage() {
             </Setting>
           </Section>
 
-          <Section id="commute" title="Home & commute" description="Used to work out when to leave for a shift, and whether two shifts are too close to travel between.">
+          <Section id="commute" title="Home & commute" open={open} description="Used to work out when to leave for a shift, and whether two shifts are too close to travel between.">
             <Setting label="Home address" help={user.homeLocation ? splitAddress(user.homeLocation.address).title : "Not set — leave-by times need it."}>
               <Button variant="secondary" onClick={() => openSheet({ kind: "home" })}>
                 {user.homeLocation ? "Change" : "Add Address"}
@@ -190,7 +288,7 @@ export function SettingsPage() {
             </Setting>
           </Section>
 
-          <Section id="pay" title="Pay estimates">
+          <Section id="pay" title="Pay estimates" open={open}>
             <form onSubmit={saveTax}>
               <Setting label="Deductions (%)" htmlFor="settings-tax" help={taxError ? <span className="text-destructive">{taxError}</span> : "Taken off estimated pay to show roughly what lands in your account."}>
                 <input
@@ -208,25 +306,19 @@ export function SettingsPage() {
             </form>
           </Section>
 
-          <Section id="home" title="Home page" description="What your Home calendar shows, on this browser.">
+          <Section id="home" title="Home page" open={open} description="What your Home calendar shows, on this browser.">
             <Setting label="Schedules shared with me" help="Shifts from people who share their schedule with you appear on your Home calendar next to your own. Turn this off to see only yours — their schedules stay under Sharing.">
               <Switch label="Show schedules shared with me on Home" checked={showShared} onChange={(checked) => setPreference("sharedOnHome", checked ? "on" : "off")} />
             </Setting>
           </Section>
 
-          <Section id="appearance" title="Appearance" description="Applies as soon as you pick one, on this browser.">
+          <Section id="appearance" title="Appearance" open={open} description="Applies as soon as you pick one, on this browser.">
             <div className="p-4">
               <ThemePicker />
             </div>
           </Section>
 
-          {/* The sidebar already lists these; a phone's tab bar has no room for them */}
-          <section aria-label="More" className="surface mb-9 divide-y divide-border overflow-hidden md:hidden">
-            <PhoneLink icon={ClipboardList} label="Timesheet" detail="Hours you worked" href="/timesheet" />
-            <PhoneLink icon={Users} label="Sharing" detail="Send or share your schedule" href="/sharing" />
-          </section>
-
-          <Section id="account" title="Account">
+          <Section id="account" title="Account" open={open}>
             {user.hasPassword && (
               <Setting label="Password" help="Changing it signs out your other devices.">
                 <Button variant="secondary" onClick={() => openSheet({ kind: "password" })}>

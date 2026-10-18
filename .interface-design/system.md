@@ -29,6 +29,9 @@ Feel: calm and warm, like a paper planner on a desk. Not a dashboard.
 - A filled button under the pointer is `primary-hover` (it moves toward the text
   colour, so the label gains contrast in both modes). Never a lighter fill on hover.
 - Job colours belong to the user's data; they mark a shift, never chrome.
+- One surface is filled with `primary`: Home's next-shift card (the phone app's card, 2026-10-14).
+  On it every word is `primary-foreground` at full strength (a faded white drops under 4.5:1);
+  wells are `primary-well`, hovered `primary-well-hover`, outlines `primary-foreground/30`.
 
 ## Type
 

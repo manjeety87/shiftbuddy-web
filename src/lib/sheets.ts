@@ -1,6 +1,7 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
+import type { Shift } from "@/interfaces/shift.d";
 
 // Panels that open over a page (the mobile app's "sheets"). Anything can ask for
 // one with `openSheet`; `SheetHost` in the app layout draws the stack. A sheet can
@@ -11,10 +12,13 @@ export type SheetRequest =
   | { kind: "job"; jobId?: string }
   | { kind: "timeEntry"; entryId?: string; shiftId?: string; jobId?: string }
   | { kind: "copy"; shiftIds: string[] }
+  | { kind: "copyWeek"; shifts: Shift[]; weekStart: Date }
   | { kind: "route"; shiftId: string }
   | { kind: "weather"; shiftId: string }
   | { kind: "conflict"; conflict: "overlap" | "travel"; fromId: string; toId: string }
   | { kind: "scan" }
+  | { kind: "paySummary" }
+  | { kind: "welcome" }
   | { kind: "shared"; ownerId: string; ownerName: string; date?: Date }
   | { kind: "verifyEmail" }
   | { kind: "password" }
@@ -51,3 +55,20 @@ const subscribe = (listener: () => void) => {
 const EMPTY: OpenSheet[] = [];
 
 export const useOpenSheets = () => useSyncExternalStore(subscribe, () => stack, () => EMPTY);
+
+// A screen shows one "add a shift" button, not three (the user's call, 2026-10-17). On
+// a wide screen that is the sidebar's New shift (and N); pages with a picked day
+// (Calendar, Home's week) lend it that day, so it still adds where the person is looking.
+let pickedDay: Date | null = null;
+
+export const usePickedDay = (day: Date) => {
+  const time = day.getTime();
+  useEffect(() => {
+    pickedDay = new Date(time);
+    return () => {
+      pickedDay = null;
+    };
+  }, [time]);
+};
+
+export const openNewShift = () => openSheet(pickedDay ? { kind: "shift", date: pickedDay } : { kind: "shift" });

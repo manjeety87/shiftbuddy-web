@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useLogOut, useUser } from "@/lib/session";
-import { openSheet } from "@/lib/sheets";
+import { openNewShift } from "@/lib/sheets";
 import { Kbd } from "../ui/Button";
 import { isActive, SETTINGS, SIDEBAR_GROUPS, type NavItem } from "./nav";
 
@@ -167,7 +167,7 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
         </button>
         <button
           type="button"
-          onClick={() => openSheet({ kind: "shift" })}
+          onClick={openNewShift}
           title="New shift"
           className="flex h-9 items-center justify-center gap-2 rounded-lg bg-primary text-sm font-medium text-primary-foreground shadow-[inset_0_1px_0_rgb(255_255_255/0.2),0_1px_2px_rgb(0_0_0/0.14)] transition-[scale,background-color] duration-150 ease-out active:scale-[0.98] lg:h-8 lg:justify-start lg:px-2.5 pointer-fine:hover:bg-primary-hover"
         >

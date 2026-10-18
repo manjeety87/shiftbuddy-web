@@ -10,6 +10,10 @@ const DEFAULTS = {
   homeView: "week" as "week" | "month",
   /** Whether Home's calendar also shows the schedules other people share with you */
   sharedOnHome: "on" as "on" | "off",
+  /** The three welcome slides a new account sees once on this browser */
+  welcomeSeen: "no" as "no" | "yes",
+  /** Home's "Getting started" checklist, until it's done or hidden */
+  gettingStarted: "shown" as "shown" | "hidden",
 };
 
 type Preferences = typeof DEFAULTS;
@@ -24,6 +28,8 @@ const read = <K extends Key>(key: K): Preferences[K] => {
     // Only values this version knows; anything else (an old or edited entry) falls back
     if (key === "homeView" && (saved === "week" || saved === "month")) return saved as Preferences[K];
     if (key === "sharedOnHome" && (saved === "on" || saved === "off")) return saved as Preferences[K];
+    if (key === "welcomeSeen" && (saved === "no" || saved === "yes")) return saved as Preferences[K];
+    if (key === "gettingStarted" && (saved === "shown" || saved === "hidden")) return saved as Preferences[K];
   } catch {
     // Storage blocked (private window): the defaults apply
   }

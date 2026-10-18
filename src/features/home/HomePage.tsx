@@ -1,11 +1,11 @@
 "use client";
 
-import { CalendarPlus, ChevronRight, Navigation, Plus, ScanLine, TriangleAlert } from "lucide-react";
-import { useState } from "react";
+import { Briefcase, CalendarPlus, ChevronRight, DoorOpen, Navigation, Plus, Repeat, ScanLine, Timer, TriangleAlert } from "lucide-react";
+import { useEffect, useState } from "react";
 import { PeriodNav } from "@/components/PeriodNav";
 import { PeriodSummary } from "@/components/PeriodSummary";
-import { formatShiftTimes, isHappeningNow, ShiftList, ShiftRow } from "@/components/ShiftRow";
-import { Button } from "@/components/ui/Button";
+import { isHappeningNow, ShiftList, ShiftRow } from "@/components/ShiftRow";
+import { Button, Spinner } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
@@ -22,15 +22,16 @@ import { setPreference, useIsWide, usePreference } from "@/lib/preferences";
 import { useUser } from "@/lib/session";
 import { getIncomingShares, getSharedShifts } from "@/lib/shares";
 import { useShiftsChanged } from "@/lib/shiftEvents";
-import { copyShifts, getMyShifts } from "@/lib/shifts";
+import { getMyShifts } from "@/lib/shifts";
 import { formatDuration } from "@/lib/shiftTime";
-import { openSheet } from "@/lib/sheets";
+import { openSheet, usePickedDay } from "@/lib/sheets";
 import { clockIn, CLOCK_IN_OPENS_MINUTES_BEFORE, clockOut, getCurrentEntry, useTimesheetChanged, type TimeEntry } from "@/lib/timesheet";
 import { commuteLabel } from "@/lib/travelConflicts";
 import { useFetch } from "@/lib/useFetch";
+import { useMyJobs } from "@/lib/useMyJobs";
 import { useNow } from "@/lib/useNow";
 import { formatDegrees, getShiftWeather } from "@/lib/weather";
-import { announceCopy } from "../shifts/CopySheet";
+import { GettingStarted } from "./GettingStarted";
 import { MonthBoard, PeopleFilter, WeekBoard, type BoardEntry, type BoardPerson } from "./ScheduleBoard";
 import { ComingUpCard, TodayCard, type ComingUp, type PersonToday } from "./TodayCard";
 import { WeatherGlyph } from "../weather/WeatherSheet";
@@ -51,6 +52,7 @@ const PERSON_COLOURS = ["#557a95", "#b0674a", "#866aa0", "#c29a45"];
 
 /** How far ahead "next shift" looks for the people who share with you */
 const LOOK_AHEAD_DAYS = 14;
+const RECENT_DAYS = 28;
 /** How many shifts the "Coming up" list names */
 const COMING_UP = 5;
 
@@ -61,16 +63,20 @@ const loadSharedSchedules = async (from: Date, to: Date) => {
   return lists.filter((list) => list !== null);
 };
 
-/** You have nothing coming up, but the page isn't empty (other people's shifts are on it): one quiet row, not a banner. */
-function NoShiftsStrip() {
+/**
+ * Nothing coming up, but the page isn't empty — the week below has your earlier
+ * shifts, or other people's: one quiet row, not the first-run banner. The banner
+ * on a page full of shifts read as "you have no shifts at all" (the user, 2026-10-17).
+ */
+function NoShiftsStrip({ hadShifts }: { hadShifts: boolean }) {
   return (
     <section aria-label="Your shifts" className="surface mb-7 flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3.5">
       <span aria-hidden className="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-muted/60 text-primary">
         <CalendarPlus className="size-4.5" />
       </span>
       <div className="min-w-48 flex-1">
-        <h2 className="text-base font-semibold">You have no shifts coming up</h2>
-        <p className="text-sm text-pretty text-muted-foreground">Add one yourself, or scan a photo of your schedule.</p>
+        <h2 className="text-base font-semibold">{hadShifts ? "No more shifts coming up" : "You have no shifts coming up"}</h2>
+        <p className="text-sm text-pretty text-muted-foreground">{hadShifts ? "Add your next one, or scan your new schedule." : "Add one yourself, or scan a photo of your schedule."}</p>
       </div>
       <div className="flex gap-2">
         <Button icon={<Plus aria-hidden className="size-4" />} onClick={() => openSheet({ kind: "shift" })}>
@@ -138,13 +144,11 @@ function ClockedInCard({ entry, now }: { entry: TimeEntry; now: number }) {
   );
 }
 
-const statLabel = "text-xs text-muted-foreground";
-
 /** The next shift on any day: when, how long until, the weather, when to leave, and the clock. */
 function UpcomingShiftCard({ shift, now, isClockedIn }: { shift: Shift; now: number; isClockedIn: boolean }) {
   const user = useUser();
   const [busy, setBusy] = useState(false);
-  const { data: plan } = useFetch(() => getLeavePlan(shift.id).catch(() => null), [shift.id, shift.startTime, user.commuteMode, user.arrivalBufferMinutes, user.homeLocation?.address]);
+  const { data: plan, isLoading: isPlanning } = useFetch(() => getLeavePlan(shift.id).catch(() => null), [shift.id, shift.startTime, user.commuteMode, user.arrivalBufferMinutes, user.homeLocation?.address]);
   const { data: weather } = useFetch(() => getShiftWeather(shift.id).catch(() => null), [shift.id, shift.startTime]);
 
   const start = Date.parse(shift.startTime);
@@ -166,76 +170,102 @@ function UpcomingShiftCard({ shift, now, isClockedIn }: { shift: Shift; now: num
     }
   };
 
+  const openShift = () => openSheet({ kind: "shift", shiftId: shift.id });
+  const countdown = hasStarted ? `started ${formatTime(shift.startTime)}` : `starts in ${formatCountdown(shift.startTime)}`;
+  const timeLabel = "text-xs font-medium";
+  const timeValue = "text-xl font-bold tabular-nums sm:text-2xl";
+
+  // Home's one loud element, filled with the theme colour like the phone app's card. Every word on it is full-strength
+  // ink: a faded white on the accent drops under 4.5:1, so hierarchy comes from size and weight, and wells sit a step deeper.
   return (
-    <section aria-label="Next shift" className="surface mb-7 overflow-hidden">
-      <div className="flex items-start gap-4 p-5 lg:p-6">
-        <button type="button" className="min-w-0 flex-1 rounded-lg text-left" onClick={() => openSheet({ kind: "shift", shiftId: shift.id })}>
-          <span className="flex items-center gap-2 text-sm font-semibold text-primary">
-            <span aria-hidden className="size-2 rounded-full" style={{ backgroundColor: shift.job.color }} />
-            {hasStarted ? "Now" : `Next shift · ${formatDayLabel(new Date(start), new Date(now))}`}
-          </span>
-          <span className="mt-1.5 line-clamp-2 text-3xl font-bold text-balance wrap-anywhere lg:text-4xl">{jobName(shift.job)}</span>
-          <span className="mt-1 block text-base text-muted-foreground tabular-nums">
-            {formatShiftTimes(shift)}
-            {role && ` · ${role}`}
-          </span>
+    <section
+      aria-label="Next shift"
+      className="mb-7 rounded-[1.25rem] bg-primary p-5 text-primary-foreground shadow-[inset_0_1px_0_rgb(255_255_255/0.16),0_1px_2px_rgb(0_0_0/0.12),0_12px_32px_-16px_rgb(0_0_0/0.35)] sm:p-6 **:focus-visible:outline-primary-foreground"
+    >
+      <div className="flex items-start gap-3">
+        <button type="button" onClick={openShift} className="min-w-0 flex-1 rounded-lg text-left transition-[scale] duration-150 ease-out active:scale-[0.99]">
+          <span className="block text-xs font-semibold tracking-wide uppercase">{hasStarted ? "Your shift has started" : `Upcoming shift · ${formatDayLabel(new Date(start), new Date(now))}`}</span>
+          <span className="mt-1 line-clamp-2 text-2xl font-bold text-balance wrap-anywhere sm:text-3xl lg:text-4xl">{jobName(shift.job)}</span>
+          {role && <span className="mt-0.5 block truncate text-base">{role}</span>}
         </button>
-        {weather?.status === "ok" && (
+        {/* The weather at the start, or the plain job icon until (or unless) there is one — the corner is never empty */}
+        {weather?.status === "ok" ? (
           <button
             type="button"
-            aria-label={`Weather: ${formatDegrees(weather.atStart.temperature)}, ${weather.atStart.conditionLabel}`}
+            aria-label={`${formatDegrees(weather.atStart.temperature)}, ${weather.atStart.conditionLabel}. Opens the weather for this shift`}
             onClick={() => openSheet({ kind: "weather", shiftId: shift.id })}
-            className="flex shrink-0 items-center gap-1.5 rounded-full bg-muted/60 px-3 py-1.5 text-sm font-medium tabular-nums transition-[scale,background-color] duration-150 ease-out active:scale-95 pointer-fine:hover:bg-muted"
+            className="flex h-12 min-w-12 shrink-0 items-center justify-center gap-1.5 rounded-2xl bg-primary-well px-3 text-lg font-bold tabular-nums transition-[scale,background-color] duration-150 ease-out active:scale-95 pointer-fine:hover:bg-primary-well-hover"
           >
-            <WeatherGlyph hour={weather.atStart} className="size-4 text-primary" />
+            <WeatherGlyph hour={weather.atStart} className="size-5" />
             {formatDegrees(weather.atStart.temperature)}
           </button>
+        ) : (
+          <span aria-hidden className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-primary-well">
+            <Briefcase className="size-5.5" />
+          </span>
         )}
       </div>
 
-      {/* Three facts side by side: how long, when to leave, the clock */}
-      <div className="grid grid-cols-2 gap-px border-t border-border bg-border sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.5fr)_minmax(0,1fr)]">
-        <div className="bg-card px-5 py-3.5 lg:px-6">
-          <p className={statLabel}>{hasStarted ? "In progress" : "Starts in"}</p>
-          <p className="text-lg font-semibold tabular-nums">{hasStarted ? `Ends ${formatTime(shift.endTime)}` : formatCountdown(shift.startTime)}</p>
+      {/* When it runs, when to leave, the clock: stacked on a phone, side by side when there's room */}
+      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1fr)]">
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 pb-2 sm:col-span-2 lg:col-span-1 lg:pb-0">
+          <p>
+            <span className={`block ${timeLabel}`}>Starts</span>
+            <span className={timeValue}>{formatTime(shift.startTime)}</span>
+          </p>
+          <span aria-hidden className="h-10 w-px bg-primary-foreground/25" />
+          <p className="text-right">
+            <span className={`block ${timeLabel}`}>Ends</span>
+            <span className={timeValue}>{formatTime(shift.endTime)}</span>
+          </p>
         </div>
 
         <button
           type="button"
           onClick={() => openSheet(plan || (hasJobPin && user.homeLocation) ? { kind: "route", shiftId: shift.id } : hasJobPin ? { kind: "home" } : { kind: "job", jobId: shift.jobId })}
-          className="order-last col-span-2 flex items-center gap-3 bg-card px-5 py-3.5 text-left row-hover sm:order-none sm:col-span-1 lg:px-6"
+          className="flex min-h-14 items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-left ring-1 ring-primary-foreground/30 transition-[scale,background-color] duration-150 ease-out ring-inset active:scale-[0.98] pointer-fine:hover:bg-primary-well"
         >
+          {plan ? <DoorOpen aria-hidden className="size-4.5 shrink-0" /> : <Navigation aria-hidden className="size-4.5 shrink-0" />}
           <span className="min-w-0 flex-1">
-            <span className={`flex items-center gap-1.5 ${statLabel}`}>
-              <Navigation aria-hidden className="size-3 text-primary" />
-              {plan ? "Leave home by" : "Getting there"}
-            </span>
             {plan ? (
               <>
-                <span className="block text-lg font-semibold tabular-nums">{formatTime(plan.leaveAt)}</span>
-                <span className="block truncate text-xs text-muted-foreground">{summarizeLeavePlan(plan)}</span>
+                <span className="block text-[0.9375rem] font-semibold tabular-nums">Leave home by {formatTime(plan.leaveAt)}</span>
+                <span className="block truncate text-xs">{summarizeLeavePlan(plan)}</span>
               </>
+            ) : isPlanning ? (
+              <Spinner className="size-4" />
             ) : (
-              <span className="block text-sm font-medium text-pretty">
-                {!hasJobPin ? "Add this job’s location to see when to leave" : !user.homeLocation ? "Add your home address to see when to leave" : "See the route"}
+              <span className="block text-sm font-semibold text-pretty">
+                {!hasJobPin ? "Pin this job on the map to see when to leave" : !user.homeLocation ? "Add your home address to see when to leave" : "Plan your route"}
               </span>
             )}
           </span>
-          <ChevronRight aria-hidden className="size-4 shrink-0 text-faint" />
+          <ChevronRight aria-hidden className="size-4.5 shrink-0 opacity-70" />
         </button>
 
-        <div className="flex items-center bg-card px-5 py-3.5 lg:px-6">
-          {canClockIn ? (
-            <Button busy={busy} onClick={startClock} className="w-full md:h-9">
-              Clock In
-            </Button>
-          ) : (
-            <div>
-              <p className={statLabel}>Clock</p>
-              <p className="text-sm font-medium tabular-nums">{isClockedIn ? "You’re clocked in" : start - now < DAY_MS ? `Opens at ${formatTime(new Date(opensAt).toISOString())}` : `Opens ${CLOCK_IN_OPENS_MINUTES_BEFORE} min before`}</p>
-            </div>
-          )}
-        </div>
+        {canClockIn ? (
+          // The card's one solid button: starting the clock is what the user is here for once the shift comes
+          <button
+            type="button"
+            onClick={startClock}
+            disabled={busy}
+            aria-busy={busy || undefined}
+            aria-label={`Clock in at ${jobName(shift.job)}`}
+            className="flex min-h-14 items-center justify-center gap-2 rounded-xl bg-primary-foreground px-4 text-primary shadow-[0_1px_2px_rgb(0_0_0/0.12)] transition-[scale,opacity] duration-150 ease-out active:scale-[0.97] disabled:opacity-70"
+          >
+            {busy ? <Spinner className="size-4.5" /> : <Timer aria-hidden className="size-4.5" />}
+            <span className="text-base font-bold">Clock In</span>
+            <span className="text-sm font-semibold tabular-nums">· {countdown}</span>
+          </button>
+        ) : (
+          <div className="flex min-h-14 flex-col items-center justify-center rounded-xl bg-primary-well px-4 py-2 text-center">
+            <p className="flex items-center gap-2 text-base font-bold tabular-nums">
+              <Timer aria-hidden className="size-4.5" />
+              {isClockedIn ? "You’re clocked in" : `Starts in ${formatCountdown(shift.startTime)}`}
+            </p>
+            {!isClockedIn && <p className="text-xs tabular-nums">Clock in opens at {formatTime(new Date(opensAt).toISOString())}</p>}
+          </div>
+        )}
       </div>
     </section>
   );
@@ -269,7 +299,7 @@ export function HomePage() {
   const user = useUser();
   const now = useNow();
   const [selected, setSelected] = useState(() => startOfDay(new Date()));
-  const [copying, setCopying] = useState(false);
+  usePickedDay(selected);
 
   const days = getWeekDays(selected);
   const weekStart = days[0];
@@ -297,18 +327,44 @@ export function HomePage() {
   const nearby = useFetch(async () => (showShared ? loadSharedSchedules(new Date(Date.now() - DAY_MS), new Date(Date.now() + LOOK_AHEAD_DAYS * DAY_MS)) : []), [showShared]);
   // From a day back, so a shift already in progress is found; then keep the ones not over yet
   const upcoming = useFetch(() => getMyShifts({ from: new Date(Date.now() - DAY_MS).toISOString() }));
+  // Only to word the "nothing coming up" card: someone with recent shifts isn't new here.
+  // Not taken from the week on screen, so the card doesn't change as the week is turned.
+  const recent = useFetch(() => getMyShifts({ from: new Date(Date.now() - RECENT_DAYS * DAY_MS).toISOString(), to: new Date().toISOString() }));
   const current = useFetch(getCurrentEntry);
   const conflicts = useFetch(() => getConflicts().catch(() => null));
+
+  const jobs = useMyJobs();
+  const welcomeSeen = usePreference("welcomeSeen");
+  const guidePreference = usePreference("gettingStarted");
+
+  // A brand-new account (no job yet) gets the welcome once on this browser. Marked seen
+  // as it opens, so a re-render can't open a second one; people who already use the app never see it.
+  useEffect(() => {
+    if (jobs.data?.length !== 0 || welcomeSeen === "yes") return;
+    setPreference("welcomeSeen", "yes");
+    openSheet({ kind: "welcome" });
+  }, [jobs.data?.length, welcomeSeen]);
 
   useShiftsChanged(() => {
     week.refetch();
     upcoming.refetch();
+    recent.refetch();
     conflicts.refetch();
   });
   useTimesheetChanged(current.refetch);
 
   const next = upcoming.data?.find((shift) => Date.parse(shift.endTime) > now) ?? null;
   const hasNothingUpcoming = upcoming.data !== null && !next;
+
+  // Each step is read from the data, so a tick means it's really done
+  const progress = {
+    hasJob: !!jobs.data?.length,
+    hasShift: !!(upcoming.data?.length || recent.data?.length || week.data?.length),
+    hasHome: !!user.homeLocation,
+    hasClockedIn: !!current.data || !!recent.data?.some((shift) => shift.timeEntries?.length),
+  };
+  // Waits for everything it reads, so the card never appears and then vanishes
+  const showGuide = guidePreference === "shown" && !Object.values(progress).every(Boolean) && jobs.data !== null && upcoming.data !== null && recent.data !== null;
 
   const dayStart = selected.getTime();
   const dayEnd = addDays(selected, 1).getTime();
@@ -354,17 +410,6 @@ export function HomePage() {
       return next;
     });
   const isPastWeek = weekEnd.getTime() <= now;
-
-  const copyWeek = async () => {
-    setCopying(true);
-    try {
-      announceCopy(await copyShifts({ shiftIds: ownWeek.map((shift) => shift.id), offsetDays: 7 }));
-    } catch (failure) {
-      notify.error("Couldn’t copy the week", { description: errorMessage(failure) });
-    } finally {
-      setCopying(false);
-    }
-  };
 
   const issues: Issue[] = [
     ...(conflicts.data?.overlaps.map((pair) => ({ key: `o-${pair.first.id}-${pair.second.id}`, text: `${jobName(pair.first.job)} and ${jobName(pair.second.job)} overlap`, when: pair.first.startTime, open: () => openSheet({ kind: "conflict", conflict: "overlap", fromId: pair.first.id, toId: pair.second.id }) })) ?? []),
@@ -436,7 +481,7 @@ export function HomePage() {
               <Button variant="secondary" aria-label="Scan a schedule" icon={<ScanLine aria-hidden className="size-4" />} onClick={() => openSheet({ kind: "scan" })}>
                 <span className="hidden sm:inline">Scan</span>
               </Button>
-              <Button aria-label="Add a shift" icon={<Plus aria-hidden className="size-4" />} onClick={() => openSheet({ kind: "shift", date: selected })}>
+              <Button aria-label="Add a shift" className="md:hidden" icon={<Plus aria-hidden className="size-4" />} onClick={() => openSheet({ kind: "shift", date: selected })}>
                 <span className="hidden sm:inline">Add Shift</span>
               </Button>
             </>
@@ -446,6 +491,8 @@ export function HomePage() {
 
       {current.data && <ClockedInCard entry={current.data} now={now} />}
 
+      {showGuide && <GettingStarted progress={progress} />}
+
       {/* The two things about right now, side by side: your next shift, and who is working today */}
       <div className={`mb-7 grid items-stretch gap-6 ${todayPeople.length ? "lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_23rem]" : ""}`}>
         <div className="flex min-w-0 flex-col *:mb-0! *:flex-1">
@@ -453,15 +500,16 @@ export function HomePage() {
             <div className="mb-7">
               <LoadError message={upcoming.error} onRetry={upcoming.retry} />
             </div>
-          ) : upcoming.data === null ? (
+          ) : upcoming.data === null || (!next && recent.data === null && !recent.error) ? (
+            // Waits for `recent` too when nothing is coming up, so the banner never flips to the strip
             <div className="mb-7">
               <SkeletonRows rows={1} className="h-44" />
             </div>
           ) : next ? (
             <UpcomingShiftCard shift={next} now={now} isClockedIn={!!current.data} />
-          ) : nearby.data?.length ? (
-            <NoShiftsStrip />
-          ) : (
+          ) : recent.data?.length || nearby.data?.length ? (
+            <NoShiftsStrip hadShifts={!!recent.data?.length} />
+          ) : showGuide ? null : (
             <div className="mb-7">
               <EmptyState
                 icon={CalendarPlus}
@@ -576,11 +624,6 @@ export function HomePage() {
                   {dayShifts.length === 0 ? (
                     <div className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-border-strong px-4 py-4">
                       <p className="flex-1 text-sm text-muted-foreground">{dayEnd <= now ? "You had no shifts that day." : `Nothing on ${selected.toLocaleDateString("en-US", { weekday: "long" })} yet.`}</p>
-                      {dayEnd > now && (
-                        <Button variant="secondary" size="sm" icon={<Plus aria-hidden className="size-3.5" />} onClick={() => openSheet({ kind: "shift", date: selected })}>
-                          Add Shift
-                        </Button>
-                      )}
                     </div>
                   ) : (
                     <ShiftList>
@@ -608,23 +651,44 @@ export function HomePage() {
 
       {/* What can wait sits under the calendar: what is next, the totals, and the copy shortcut */}
       <div className="mt-8 grid items-stretch gap-6 md:grid-cols-2 xl:grid-cols-3">
-          <ComingUpCard entries={comingUp} now={now} />
+          {/* A phone keeps Home to what the phone app's Home has; the totals live on Calendar and Pay Summary */}
+          <div className="max-md:hidden md:contents">
+            <ComingUpCard entries={comingUp} now={now} />
 
-          {view === "month" ? (
-            <PeriodSummary from={monthStart} to={monthEnd} title={`${monthStart.toLocaleDateString("en-US", { month: "long" })} in numbers`} />
-          ) : (
-            <PeriodSummary from={weekStart} to={weekEnd} title={isThisWeek ? "This week in numbers" : `${weekLabel} in numbers`} />
+            {view === "month" ? (
+              <PeriodSummary from={monthStart} to={monthEnd} title={`${monthStart.toLocaleDateString("en-US", { month: "long" })} in numbers`} showBreakdown={false} />
+            ) : (
+              <PeriodSummary from={weekStart} to={weekEnd} title={isThisWeek ? "This week in numbers" : `${weekLabel} in numbers`} showBreakdown={false} />
+            )}
+          </div>
+
+          {view === "week" && ownWeek.length > 0 && !isPastWeek && (
+            // The phone app's row: asked as a question, with what it does spelled out
+            <div className="surface flex items-center gap-3 p-3.5 md:hidden">
+              <span aria-hidden className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/12 text-primary">
+                <Repeat className="size-4.5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold">Same shifts next week?</p>
+                <p className="text-xs text-muted-foreground">
+                  Copy {ownWeek.length === 1 ? "this shift" : `these ${ownWeek.length} shifts`} to {shortDate(addDays(weekStart, 7))} – {shortDate(addDays(weekStart, 13))}
+                </p>
+              </div>
+              <Button variant="ghost" size="sm" aria-label="Copy this week’s shifts to next week" onClick={() => openSheet({ kind: "copyWeek", shifts: ownWeek, weekStart })}>
+                Copy
+              </Button>
+            </div>
           )}
 
           {view === "week" && ownWeek.length > 0 && !isPastWeek && (
-            <section aria-label="Copy this week" className="flex flex-col">
+            <section aria-label="Copy this week" className="flex flex-col max-md:hidden">
               <h2 className="mb-2.5 text-sm font-semibold">Same shifts next week?</h2>
               <div className="surface flex flex-1 flex-col items-start gap-3 p-4">
                 <p className="text-sm text-pretty text-muted-foreground">
-                  Copies {ownWeek.length === 1 ? "this week’s shift" : `these ${ownWeek.length} shifts`} to {shortDate(addDays(weekStart, 7))} – {shortDate(addDays(weekStart, 13))}. Shifts that would clash are skipped.
+                  Copy {ownWeek.length === 1 ? "this week’s shift" : `these ${ownWeek.length} shifts`} to {shortDate(addDays(weekStart, 7))} – {shortDate(addDays(weekStart, 13))}. You’ll see them first, to change or remove any.
                 </p>
-                <Button variant="secondary" className="mt-auto" busy={copying} onClick={copyWeek}>
-                  Copy
+                <Button variant="secondary" className="mt-auto" onClick={() => openSheet({ kind: "copyWeek", shifts: ownWeek, weekStart })}>
+                  Review and Copy
                 </Button>
               </div>
             </section>
