@@ -40,7 +40,7 @@ function ModeIcon({ mode, className = "size-3" }: { mode: TransitMode; className
 function LineBadge({ leg }: { leg: TransitLeg }) {
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-bold"
+      className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-bold"
       style={{ backgroundColor: leg.color ?? "var(--muted)", color: leg.textColor ?? (leg.color ? readableTextOn(leg.color) : "var(--foreground)") }}
     >
       <ModeIcon mode={leg.mode} />
@@ -81,12 +81,27 @@ function Rail({ colour, walk = false, last = false }: { colour: string; walk?: b
   );
 }
 
-const stepTime = "w-16 shrink-0 pt-px text-right text-xs text-muted-foreground tabular-nums";
+/**
+ * A stop or direction that fits on one line, like the rest of the steps. Someone
+ * new to the area can tap it to read the whole name (to match it against the sign
+ * at the stop) and tap again to fold it back. With a pointer, hovering shows it too.
+ */
+function FullName({ text, className }: { text: string; className: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <button type="button" title={text} onClick={() => setOpen((value) => !value)} className={`block w-full min-w-0 text-left ${open ? "text-pretty wrap-break-word" : "truncate"} ${className}`}>
+      {text}
+    </button>
+  );
+}
+
+// A phone gets a narrower, centred time column so the names keep more room
+const stepTime = "w-14 shrink-0 pt-px text-center text-xs text-muted-foreground tabular-nums md:w-16 md:text-right";
 
 /** One trip step by step: times on the left, a rail down the middle, each ride in its own card. */
 function Steps({ trip, start, destination }: { trip: TransitItinerary; start: string; destination: string }) {
   return (
-    <ol className="border-t border-border px-4 pt-4 pb-4">
+    <ol className="border-t border-border px-3 pt-4 pb-4 md:px-4">
       {trip.legs.map((leg, index) => {
         const walk = isWalk(leg);
         const where = leg.to.name ?? destination;
@@ -95,7 +110,7 @@ function Steps({ trip, start, destination }: { trip: TransitItinerary; start: st
             <span className={stepTime}>{formatTime(leg.departure)}</span>
             <Rail colour={walk ? WALK_COLOUR : (leg.color ?? "var(--primary)")} walk={walk} />
             <div className="min-w-0 flex-1 pb-4">
-              <p className="truncate text-sm font-semibold">{leg.from.name ?? (index === 0 ? start : "Start")}</p>
+              <FullName text={leg.from.name ?? (index === 0 ? start : "Start")} className="text-sm font-semibold" />
               {walk ? (
                 <p className="mt-1 flex items-start gap-1.5 text-sm text-muted-foreground">
                   <Footprints aria-hidden className="mt-0.5 size-3.5 shrink-0" />
@@ -105,9 +120,11 @@ function Steps({ trip, start, destination }: { trip: TransitItinerary; start: st
                 </p>
               ) : (
                 <div className="mt-1.5 rounded-lg bg-background px-3 py-2.5 shadow-[0_0_0_1px_var(--line)]">
-                  <p className="flex items-center gap-2">
+                  <p className="flex items-start gap-2">
                     <LineBadge leg={leg} />
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium">{leg.headsign ?? leg.lineName ?? modeLabel(leg.mode)}</span>
+                    <span className="min-w-0 flex-1 pt-px">
+                      <FullName text={leg.headsign ?? leg.lineName ?? modeLabel(leg.mode)} className="text-sm font-medium" />
+                    </span>
                   </p>
                   <p className="mt-1.5 text-xs text-pretty">
                     Get off at {where} · {formatTime(leg.arrival)}
@@ -124,7 +141,9 @@ function Steps({ trip, start, destination }: { trip: TransitItinerary; start: st
       <li className="flex gap-2.5">
         <span className={stepTime}>{formatTime(trip.arrival)}</span>
         <Rail colour="var(--primary)" last />
-        <p className="min-w-0 flex-1 truncate text-sm font-semibold">{destination}</p>
+        <span className="min-w-0 flex-1">
+          <FullName text={destination} className="text-sm font-semibold" />
+        </span>
       </li>
     </ol>
   );
