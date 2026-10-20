@@ -18,6 +18,7 @@ export type SheetRequest =
   | { kind: "conflict"; conflict: "overlap" | "travel"; fromId: string; toId: string }
   | { kind: "scan" }
   | { kind: "paySummary" }
+  | { kind: "themes" }
   | { kind: "welcome" }
   | { kind: "shared"; ownerId: string; ownerName: string; date?: Date }
   | { kind: "verifyEmail" }

@@ -3,10 +3,29 @@
 // the same family as the mobile app's `constants/themes.ts`.
 
 export const THEMES = [
-  { name: "sunsamaFocus", label: "Sunsama Focus", note: "Sage green on warm paper" },
-  { name: "clayStudio", label: "Clay Studio", note: "Terracotta on cream" },
-  { name: "harborMist", label: "Harbor Mist", note: "Dusty blue on soft stone" },
-  { name: "lavenderDusk", label: "Lavender Dusk", note: "Muted plum on warm grey" },
+  { name: "sunsamaFocus", label: "Sunsama Focus", note: "Sage green on warm paper", collection: "original" },
+  { name: "clayStudio", label: "Clay Studio", note: "Terracotta on cream", collection: "original" },
+  { name: "harborMist", label: "Harbor Mist", note: "Dusty blue on soft stone", collection: "original" },
+  { name: "lavenderDusk", label: "Lavender Dusk", note: "Muted plum on warm grey", collection: "original" },
+  { name: "cupertinoBlue", label: "Cupertino Blue", note: "System blue on cool grey", collection: "apple" },
+  { name: "titaniumGraphite", label: "Titanium Graphite", note: "Graphite on light stone", collection: "apple" },
+  { name: "sageAtelier", label: "Sage Atelier", note: "Botanical green on mist", collection: "apple" },
+  { name: "pacificTeal", label: "Pacific Teal", note: "Deep teal on sea-glass white", collection: "apple" },
+  { name: "midnightIndigo", label: "Midnight Indigo", note: "Rich indigo on soft lilac grey", collection: "apple" },
+  { name: "champagneSand", label: "Champagne Sand", note: "Warm gold-brown on ivory", collection: "apple" },
+  { name: "obsidianSilver", label: "Obsidian & Silver", note: "Near-black and silver", collection: "elegant" },
+  { name: "deepForest", label: "Deep Forest", note: "Forest green on pale sage", collection: "elegant" },
+  { name: "nocturnePlum", label: "Nocturne Plum", note: "Muted plum on blush white", collection: "elegant" },
+  { name: "oxfordNavy", label: "Oxford Navy", note: "Navy on cool paper", collection: "elegant" },
+  { name: "espressoBronze", label: "Espresso Bronze", note: "Bronze on warm linen", collection: "elegant" },
+  { name: "slateIce", label: "Slate & Ice", note: "Slate teal on icy grey", collection: "elegant" },
+] as const;
+
+/** The picker's groups, in order. Settings shows the first one; the rest open from "All themes". */
+export const COLLECTIONS = [
+  { id: "original", label: "Original" },
+  { id: "apple", label: "Apple-inspired" },
+  { id: "elegant", label: "Elegant" },
 ] as const;
 
 /** "system" follows the device: light by day, dark when the device goes dark. */

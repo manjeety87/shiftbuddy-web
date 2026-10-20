@@ -1,5 +1,6 @@
 "use client";
 
+import { ThemesSheet } from "@/components/theme/ThemePicker";
 import { RouteSheet } from "@/features/commute/RouteSheet";
 import { WelcomeSheet } from "@/features/home/WelcomeSheet";
 import { ConflictSheet } from "@/features/conflicts/ConflictSheet";
@@ -35,6 +36,8 @@ const render = (request: SheetRequest, onClose: () => void) => {
       return <ConflictSheet conflict={request.conflict} fromId={request.fromId} toId={request.toId} onClose={onClose} />;
     case "welcome":
       return <WelcomeSheet onClose={onClose} />;
+    case "themes":
+      return <ThemesSheet onClose={onClose} />;
     case "paySummary":
       return <PaySummarySheet onClose={onClose} />;
     case "scan":
