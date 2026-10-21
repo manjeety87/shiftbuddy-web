@@ -777,6 +777,32 @@ textarea,
 }
 
 /*
+ * Anything that can be pressed shows the hand. Tailwind v4 leaves buttons with the
+ * plain arrow (the platform default); on the web that reads as "not clickable".
+ * Disabled controls keep the arrow, so the hand never promises something that won't happen.
+ */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+[role="switch"],
+[role="radio"],
+[role="tab"],
+[role="menuitem"],
+[role="option"],
+a[href],
+summary,
+select:not(:disabled),
+label:has(> input:not(:disabled)),
+input[type="checkbox"]:not(:disabled),
+input[type="radio"]:not(:disabled),
+input[type="color"],
+input[type="file"] {
+  cursor: pointer;
+}
+:disabled {
+  cursor: default;
+}
+
+/*
  * A native select with our own arrow: the browser's sits at a different inset in
  * every engine. The list itself stays native (the right control on a phone).
  */
