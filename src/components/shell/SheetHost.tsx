@@ -1,5 +1,6 @@
 "use client";
 
+import { CustomThemeSheet } from "@/components/theme/CustomThemeSheet";
 import { ThemesSheet } from "@/components/theme/ThemePicker";
 import { RouteSheet } from "@/features/commute/RouteSheet";
 import { WelcomeSheet } from "@/features/home/WelcomeSheet";
@@ -38,6 +39,8 @@ const render = (request: SheetRequest, onClose: () => void) => {
       return <WelcomeSheet onClose={onClose} />;
     case "themes":
       return <ThemesSheet onClose={onClose} />;
+    case "customTheme":
+      return <CustomThemeSheet onClose={onClose} />;
     case "paySummary":
       return <PaySummarySheet onClose={onClose} />;
     case "scan":

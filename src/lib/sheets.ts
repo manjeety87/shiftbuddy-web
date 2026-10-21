@@ -19,6 +19,7 @@ export type SheetRequest =
   | { kind: "scan" }
   | { kind: "paySummary" }
   | { kind: "themes" }
+  | { kind: "customTheme" }
   | { kind: "welcome" }
   | { kind: "shared"; ownerId: string; ownerName: string; date?: Date }
   | { kind: "verifyEmail" }

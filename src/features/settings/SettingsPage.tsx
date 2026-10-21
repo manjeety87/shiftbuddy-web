@@ -311,7 +311,7 @@ export function SettingsPage() {
             </Setting>
           </Section>
 
-          <Section id="appearance" title="Appearance" open={open} description="Applies as soon as you pick one, on this browser.">
+          <Section id="appearance" title="Appearance" open={open} description="Pick to preview it on the whole page; Save keeps it, on this browser.">
             <div className="p-4">
               <ThemePicker />
             </div>

@@ -197,13 +197,24 @@ try {
     await ui.getByText("You aren’t sharing your schedule with anyone.").waitFor();
   });
 
-  await step("settings: a theme applies at once and survives a reload — and so does the login", async () => {
+  await step("settings: a theme only previews until Save, then survives a reload — and so does the login", async () => {
     await ui.getByRole("link", { name: "Settings" }).first().click();
     const look = () => page.evaluate(() => `${document.documentElement.dataset.theme} ${document.documentElement.dataset.mode}`);
+    const saved = () => page.evaluate(() => `${localStorage.getItem("shiftbuddy.theme")} ${localStorage.getItem("shiftbuddy.mode")}`);
+    const before = await saved();
     await ui.getByRole("radio", { name: /Lavender Dusk/ }).click();
     await ui.getByRole("radio", { name: "Dark", exact: true }).check({ force: true }); // every theme has a dark side
     await page.waitForFunction(() => document.documentElement.dataset.mode === "dark");
     if ((await page.evaluate(() => getComputedStyle(document.body).colorScheme)) !== "dark") throw new Error("dark mode did not change the colours");
+    if ((await saved()) !== before) throw new Error(`a preview was saved: ${await saved()}`);
+    await ui.getByText(/Previewing Lavender Dusk/).waitFor();
+    await ui.getByRole("button", { name: "Cancel", exact: true }).click();
+    if ((await look()).startsWith("lavenderDusk")) throw new Error(`Cancel kept the preview: ${await look()}`);
+
+    await ui.getByRole("radio", { name: /Lavender Dusk/ }).click();
+    await ui.getByRole("radio", { name: "Dark", exact: true }).check({ force: true });
+    await ui.getByRole("button", { name: "Save", exact: true }).click();
+    if ((await saved()) !== "lavenderDusk dark") throw new Error(`Save did not keep it: ${await saved()}`);
     await ui.getByRole("radio", { name: "Driving" }).check({ force: true });
     await page.waitForTimeout(500);
     await shot("13-settings-dark");
@@ -211,8 +222,29 @@ try {
     await ui.getByRole("heading", { name: "Settings" }).waitFor();
     if ((await look()) !== "lavenderDusk dark") throw new Error(`theme was lost on reload: ${await look()}`);
     if (!(await ui.getByRole("radio", { name: "Driving" }).isChecked())) throw new Error("commute mode was not saved");
+
+    // Their own theme: an accent typed in, previewed on a made-up Home, kept by Save & Use
+    await ui.getByRole("button", { name: /Make your own/ }).click();
+    await sheet().getByRole("radio", { name: "Dark side" }).check({ force: true });
+    const accent = sheet().getByLabel("Accent colour code");
+    await accent.fill("#e0669a");
+    const previewAccent = await sheet()
+      .getByRole("img", { name: /Preview of Home/ })
+      .evaluate((node) => getComputedStyle(node).getPropertyValue("--primary").trim());
+    if (previewAccent !== "#e0669a") throw new Error(`the preview did not take the accent: ${previewAccent}`);
+    if ((await look()) !== "lavenderDusk dark") throw new Error("the page changed before Save & Use");
+    await shot("13b-custom-theme");
+    await sheet().getByRole("button", { name: "Save & Use" }).click();
+    await closed();
+    const primary = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--primary").trim());
+    if ((await look()) !== "custom dark" || (await primary()) !== "#e0669a") throw new Error(`own theme not in use: ${await look()} ${await primary()}`);
+    await page.reload();
+    await ui.getByRole("heading", { name: "Settings" }).waitFor();
+    if ((await look()) !== "custom dark" || (await primary()) !== "#e0669a") throw new Error(`own theme lost on reload: ${await look()} ${await primary()}`);
+
     await ui.getByRole("radio", { name: /Sunsama Focus/ }).click();
     await ui.getByRole("radio", { name: "Light", exact: true }).check({ force: true });
+    await ui.getByRole("button", { name: "Save", exact: true }).click();
     if ((await look()) !== "sunsamaFocus light") throw new Error(`could not go back to light: ${await look()}`);
   });
 

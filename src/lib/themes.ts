@@ -1,3 +1,5 @@
+import { CUSTOM_STORAGE_KEY, CUSTOM_VARIABLES } from "./customTheme";
+
 // Theme names only. The colours themselves live in `app/globals.css`: one block per
 // `[data-theme]` for its light side and one per `[data-theme][data-mode="dark"]` —
 // the same family as the mobile app's `constants/themes.ts`.
@@ -40,6 +42,12 @@ export type ThemeMode = (typeof MODES)[number]["value"];
 /** What is on the page once "system" has been answered */
 export type ResolvedMode = "light" | "dark";
 
+/** The one the person makes themselves (`lib/customTheme.ts`). Not in THEMES: it has no fixed colours. */
+export const CUSTOM_THEME = "custom";
+export const CUSTOM_LABEL = "My theme";
+/** Anything that can be on <html data-theme>: a built-in theme or their own */
+export type LookName = ThemeName | typeof CUSTOM_THEME;
+
 export const DEFAULT_THEME: ThemeName = "sunsamaFocus";
 export const DEFAULT_MODE: ThemeMode = "system";
 export const THEME_STORAGE_KEY = "shiftbuddy.theme";
@@ -49,15 +57,19 @@ export const DARK_QUERY = "(prefers-color-scheme: dark)";
 export const LEGACY_DARK_THEME = "eveningFocus";
 
 export const isThemeName = (value: unknown): value is ThemeName => THEMES.some((theme) => theme.name === value);
+export const isLookName = (value: unknown): value is LookName => value === CUSTOM_THEME || isThemeName(value);
 export const isThemeMode = (value: unknown): value is ThemeMode => MODES.some((mode) => mode.value === value);
 
 /**
  * Runs in <head> before the first paint, so a saved theme never flashes the
- * default one first. Only known names are applied: the values come from storage.
- * `components/theme/useTheme.ts` reads the same two keys the same way.
+ * default one first. Only known names and well-formed colours are applied: the
+ * values come from storage. Their own theme is used only when its colours are all
+ * there. `components/theme/useTheme.ts` reads the same keys the same way.
  */
-export const THEME_BOOT_SCRIPT = `(function(){try{var d=document.documentElement,t=localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)}),m=localStorage.getItem(${JSON.stringify(
-  MODE_STORAGE_KEY,
-)});if(t===${JSON.stringify(LEGACY_DARK_THEME)}){t=${JSON.stringify(DEFAULT_THEME)};m=m||"dark"}if(${JSON.stringify(THEMES.map((theme) => theme.name))}.indexOf(t)>-1)d.setAttribute("data-theme",t);if(m!=="light"&&m!=="dark")m=matchMedia(${JSON.stringify(
+export const THEME_BOOT_SCRIPT = `(function(){try{var d=document.documentElement,s=localStorage,t=s.getItem(${JSON.stringify(THEME_STORAGE_KEY)}),m=s.getItem(${JSON.stringify(MODE_STORAGE_KEY)}),v=${JSON.stringify(
+  CUSTOM_VARIABLES,
+)},c=null,ok=false;try{c=JSON.parse(s.getItem(${JSON.stringify(CUSTOM_STORAGE_KEY)}))}catch(e){}if(c&&typeof c==="object"){ok=true;for(var i=0;i<v.length;i++)if(!/^#[0-9a-f]{6}$/i.test(c[v[i]]))ok=false;if(ok)for(i=0;i<v.length;i++)d.style.setProperty(v[i],c[v[i]])}if(t===${JSON.stringify(
+  LEGACY_DARK_THEME,
+)}){t=${JSON.stringify(DEFAULT_THEME)};m=m||"dark"}if(${JSON.stringify(THEMES.map((theme) => theme.name))}.indexOf(t)>-1||(t===${JSON.stringify(CUSTOM_THEME)}&&ok))d.setAttribute("data-theme",t);if(m!=="light"&&m!=="dark")m=matchMedia(${JSON.stringify(
   DARK_QUERY,
 )}).matches?"dark":"light";d.setAttribute("data-mode",m)}catch(e){}})()`;

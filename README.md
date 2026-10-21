@@ -104,6 +104,10 @@ carry their own tracking and leading (`@theme` in `globals.css`); controls are
   Each theme is a `[data-theme]` block with a dark side (`[data-theme][data-mode="dark"]`); the
   family is the mobile app's. The choice is theme + mode (Auto / Light / Dark, `lib/themes.ts`);
   `components/theme/useTheme.ts` is the only writer. A new theme needs both blocks.
+  Picking a theme or mode only previews it (the page shows it, storage doesn't) until Save;
+  Cancel or leaving Settings puts the saved look back. "My theme" (`data-theme="custom"`) is
+  four colours a side (`lib/customTheme.ts`), saved as `--c-*` variables that the boot script
+  puts on <html>; the rest of its palette is mixed in `globals.css`.
 - Every screen shape is checked by `e2e/layout.mjs` (18 sizes, phone to ultrawide: no sideways
   scroll, nothing cut off, panels fit). A grid of cards is `grid-cols-1` on a phone, never a bare
   `grid` — an implicit column grows to its widest child. Add a new page or panel to that file.

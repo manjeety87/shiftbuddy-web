@@ -633,6 +633,50 @@
   --info: #86abc6;
 }
 
+/*
+ * The person's own theme. They pick four colours per side (page, cards, text,
+ * accent — `lib/customTheme.ts`); they arrive as `--c-*` variables in a style
+ * attribute (on <html> from the boot script, on the maker's preview from React)
+ * and everything else is mixed from them here. Status colours stay Sunsama
+ * Focus's: they were contrast-checked, and red has to stay red. The fallbacks are
+ * Sunsama Focus, for a browser whose saved colours went missing.
+ */
+[data-theme="custom"] {
+  color-scheme: light;
+  --background: var(--c-light-page, #f4f1ea);
+  --card: var(--c-light-card, #ffffff);
+  --foreground: var(--c-light-text, #2b2a25);
+  --primary: var(--c-light-accent, #527558);
+  --primary-foreground: var(--c-light-on-accent, #ffffff);
+  --raised: var(--card);
+  --muted: color-mix(in oklab, var(--background) 90%, var(--foreground));
+  --muted-foreground: color-mix(in oklab, var(--foreground) 66%, var(--background));
+  --faint: color-mix(in oklab, var(--foreground) 48%, var(--background));
+  --primary-soft: color-mix(in oklab, var(--primary) 84%, var(--background));
+  --success: #4b784b;
+  --warning: #c99a3a;
+  --destructive: #aa4f42;
+  --info: #457484;
+}
+
+[data-theme="custom"][data-mode="dark"] {
+  color-scheme: dark;
+  --background: var(--c-dark-page, #1b1a17);
+  --card: var(--c-dark-card, #262420);
+  --foreground: var(--c-dark-text, #ede9df);
+  --primary: var(--c-dark-accent, #8db393);
+  --primary-foreground: var(--c-dark-on-accent, #1b1a17);
+  --raised: color-mix(in oklab, var(--card) 76%, var(--foreground));
+  --muted: color-mix(in oklab, var(--background) 86%, var(--foreground));
+  --muted-foreground: color-mix(in oklab, var(--foreground) 70%, var(--background));
+  --faint: color-mix(in oklab, var(--foreground) 44%, var(--background));
+  --primary-soft: color-mix(in oklab, var(--primary) 80%, var(--foreground));
+  --success: #86b886;
+  --warning: #d9b064;
+  --destructive: #d98273;
+  --info: #86afbd;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
