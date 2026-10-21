@@ -14,6 +14,8 @@ const DEFAULTS = {
   welcomeSeen: "no" as "no" | "yes",
   /** Home's "Getting started" checklist, until it's done or hidden */
   gettingStarted: "shown" as "shown" | "hidden",
+  /** Calendar's "in numbers" card: hours and estimated pay for the week or month shown */
+  calendarSummary: "on" as "on" | "off",
 };
 
 type Preferences = typeof DEFAULTS;
@@ -30,6 +32,7 @@ const read = <K extends Key>(key: K): Preferences[K] => {
     if (key === "sharedOnHome" && (saved === "on" || saved === "off")) return saved as Preferences[K];
     if (key === "welcomeSeen" && (saved === "no" || saved === "yes")) return saved as Preferences[K];
     if (key === "gettingStarted" && (saved === "shown" || saved === "hidden")) return saved as Preferences[K];
+    if (key === "calendarSummary" && (saved === "on" || saved === "off")) return saved as Preferences[K];
   } catch {
     // Storage blocked (private window): the defaults apply
   }

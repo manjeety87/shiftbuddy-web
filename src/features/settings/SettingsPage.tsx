@@ -31,7 +31,7 @@ const SECTIONS = [
   { id: "profile", label: "Profile", screen: "Edit Profile" },
   { id: "commute", label: "Home & commute", screen: "Home & Commute" },
   { id: "pay", label: "Pay estimates", screen: "Tax Deduction" },
-  { id: "home", label: "Home page", screen: "Home Page" },
+  { id: "customize", label: "Customize", screen: "Customize" },
   { id: "appearance", label: "Appearance", screen: "Appearance" },
   { id: "security", label: "Password & security", screen: "Password & Security" },
   { id: "data", label: "Your data", screen: "Your Data" },
@@ -65,6 +65,11 @@ function Section({ id, title, description, open, children }: { id: SectionId; ti
       <div className="surface mt-3 divide-y divide-border">{children}</div>
     </section>
   );
+}
+
+/** Names the page a group of settings changes. */
+function GroupLabel({ children }: { children: ReactNode }) {
+  return <p className="bg-sidebar/50 px-4 py-2 text-xs font-semibold text-muted-foreground">{children}</p>;
 }
 
 /** One setting: what it is on the left, its control on the right. On a phone the control drops under the label. */
@@ -136,6 +141,8 @@ export function SettingsPage() {
   const [tax, setTax] = useState(String(user.taxDeductionPercent));
   const [saving, setSaving] = useState<"name" | "tax" | "download" | null>(null);
   const showShared = usePreference("sharedOnHome") === "on";
+  const showGuide = usePreference("gettingStarted") === "shown";
+  const showCalendarSummary = usePreference("calendarSummary") === "on";
   const open = useOpenSection();
   const isWide = useIsWide();
 
@@ -222,7 +229,7 @@ export function SettingsPage() {
             <MenuRow icon={Users} label="Sharing" href="/sharing" />
             <MenuRow icon={Palette} label={screenName("appearance")} href="#appearance" />
             <MenuRow icon={Percent} label={screenName("pay")} detail={`${user.taxDeductionPercent}%`} href="#pay" />
-            <MenuRow icon={LayoutDashboard} label={screenName("home")} href="#home" />
+            <MenuRow icon={LayoutDashboard} label={screenName("customize")} href="#customize" />
             <MenuRow icon={ShieldCheck} label={screenName("security")} href="#security" />
             <MenuRow icon={FolderDown} label={screenName("data")} href="#data" />
           </nav>
@@ -300,9 +307,17 @@ export function SettingsPage() {
             </form>
           </Section>
 
-          <Section id="home" title="Home page" open={open} description="What your Home calendar shows, on this browser.">
-            <Setting label="Schedules shared with me" help="Shifts from people who share their schedule with you appear on your Home calendar next to your own. Turn this off to see only yours — their schedules stay under Sharing.">
+          <Section id="customize" title="Customize" open={open} description="Choose what your pages show. Saved on this browser.">
+            <GroupLabel>Home</GroupLabel>
+            <Setting label="Schedules shared with me" help="Shifts from people who share their schedule with you, next to your own on Home’s calendar. Off: only yours — theirs stay under Sharing.">
               <Switch label="Show schedules shared with me on Home" checked={showShared} onChange={(checked) => setPreference("sharedOnHome", checked ? "on" : "off")} />
+            </Setting>
+            <Setting label="Getting started guide" help="The checklist on Home for setting up: a job, your shifts, your home address, your first clock-in. It goes away by itself once everything is done.">
+              <Switch label="Show the getting started guide on Home" checked={showGuide} onChange={(checked) => setPreference("gettingStarted", checked ? "shown" : "hidden")} />
+            </Setting>
+            <GroupLabel>Calendar</GroupLabel>
+            <Setting label="Hours & pay card" help="Below the calendar: shifts, hours and estimated pay for the week or month you’re looking at.">
+              <Switch label="Show the hours and pay card on Calendar" checked={showCalendarSummary} onChange={(checked) => setPreference("calendarSummary", checked ? "on" : "off")} />
             </Setting>
           </Section>
 

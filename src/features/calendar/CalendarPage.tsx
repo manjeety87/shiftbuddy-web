@@ -4,6 +4,7 @@ import { Plus } from "lucide-react";
 import { useRef, useState, type KeyboardEvent } from "react";
 import { PeriodNav } from "@/components/PeriodNav";
 import { PeriodSummary } from "@/components/PeriodSummary";
+import { usePreference } from "@/lib/preferences";
 import { isHappeningNow, ShiftList, ShiftRow, shortTime } from "@/components/ShiftRow";
 import { Button } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -45,6 +46,8 @@ export function CalendarPage() {
   const [phoneView, setPhoneView] = useState<"month" | "week">("month");
   const view = useIsWide() ? "month" : phoneView;
   const [summaryPeriod, setSummaryPeriod] = useState<"week" | "month">("month");
+  // Settings › Customize can hide the hours-and-pay card
+  const showSummary = usePreference("calendarSummary") === "on";
 
   const monthStart = new Date(selected.getFullYear(), selected.getMonth(), 1);
   const monthEnd = new Date(selected.getFullYear(), selected.getMonth() + 1, 1);
@@ -194,12 +197,14 @@ export function CalendarPage() {
             )}
           </section>
 
-          <PeriodSummary
-            from={summaryPeriod === "week" ? weekStart : monthStart}
-            to={summaryPeriod === "week" ? weekEnd : monthEnd}
-            title={summaryPeriod === "week" ? (isThisWeek ? "This week in numbers" : `Week of ${shortDate(weekStart)}`) : `${monthName} in numbers`}
-            action={<SegmentedControl label="Summary period" options={SUMMARY_PERIODS} value={summaryPeriod} onChange={setSummaryPeriod} className="w-32" />}
-          />
+          {showSummary && (
+            <PeriodSummary
+              from={summaryPeriod === "week" ? weekStart : monthStart}
+              to={summaryPeriod === "week" ? weekEnd : monthEnd}
+              title={summaryPeriod === "week" ? (isThisWeek ? "This week in numbers" : `Week of ${shortDate(weekStart)}`) : `${monthName} in numbers`}
+              action={<SegmentedControl label="Summary period" options={SUMMARY_PERIODS} value={summaryPeriod} onChange={setSummaryPeriod} className="w-32" />}
+            />
+          )}
         </div>
       </div>
     </>
