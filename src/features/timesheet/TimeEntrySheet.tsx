@@ -1,10 +1,12 @@
 "use client";
 
-import { Trash2 } from "lucide-react";
+import { Timer, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { TimeFields } from "@/components/TimeFields";
 import { Button } from "@/components/ui/Button";
 import { FormError, SectionLabel } from "@/components/ui/Field";
+import { DatePicker } from "@/components/ui/DatePicker";
+import { TimePicker } from "@/components/ui/TimePicker";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Sheet, type SheetHandle } from "@/components/ui/Sheet";
 import { LoadError, SkeletonRows } from "@/components/ui/States";
@@ -16,6 +18,7 @@ import { getShiftById } from "@/lib/shifts";
 import { defaultShiftTimes, formatDuration, resolveShiftRange, toShiftTimes, type ShiftTimes } from "@/lib/shiftTime";
 import { BREAK_CHOICES, createTimeEntry, deleteTimeEntry, getTimeEntry, updateTimeEntry, type TimeEntry } from "@/lib/timesheet";
 import { useMyJobs } from "@/lib/useMyJobs";
+import { useNow } from "@/lib/useNow";
 import { JobSelect } from "../jobs/JobSelect";
 
 // The same rule the backend applies at clock-out; the starting choice until the person picks a break
@@ -59,6 +62,9 @@ export function TimeEntrySheet({ entryId, shiftId, jobId: startJobId, onClose }:
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"save" | "delete" | null>(null);
   const [attempt, setAttempt] = useState(0);
+  // Still on the clock: only the clock-in time is edited, until they say they've finished
+  const [finishing, setFinishing] = useState(false);
+  const now = useNow();
 
   useEffect(() => {
     const failed = (failure: unknown) => setLoadError(errorMessage(failure, "Couldn’t open these hours."));
@@ -93,6 +99,30 @@ export function TimeEntrySheet({ entryId, shiftId, jobId: startJobId, onClose }:
   const breakMinutes = chosenBreak ?? usualBreak(range.durationMinutes);
   const paidMinutes = Math.max(0, range.durationMinutes - breakMinutes);
   const isLoaded = baseline !== null;
+  const isRunning = !!entry && !entry.clockOut && !finishing;
+  const runningMinutes = Math.max(0, Math.round((now - range.startAt.getTime()) / 60000));
+
+  // "I've finished": the end starts at now, so the length is right from the first look
+  const finish = () => {
+    setTimes((current) => ({ ...current, end: new Date() }));
+    setFinishing(true);
+    setError(null);
+  };
+
+  const saveClockIn = async () => {
+    if (!entryId) return;
+    if (range.startAt.getTime() > Date.now()) return setError("Clock-in can’t be later than now.");
+    setBusy("save");
+    setError(null);
+    try {
+      await updateTimeEntry(entryId, { clockIn: range.startAt.toISOString() });
+      notify.success("Clock-in time updated", { description: "You’re still on the clock." });
+      sheet.current?.dismiss();
+    } catch (failure) {
+      setError(errorMessage(failure, "Couldn’t change the clock-in time."));
+      setBusy(null);
+    }
+  };
 
   const save = async () => {
     if (!jobId) return setError("Choose the job these hours were for.");
@@ -139,7 +169,7 @@ export function TimeEntrySheet({ entryId, shiftId, jobId: startJobId, onClose }:
       title={entry ? jobName(entry.job) : (shiftJob ?? "Add Hours")}
       onClose={onClose}
       isDirty={isLoaded && snapshot(entry?.jobId ?? selectedJobId, times, breakMinutes) !== baseline}
-      action={isLoaded ? { label: isNew ? "Add" : "Save", onClick: save, busy: busy === "save", disabled: busy === "delete" || !jobs || jobs.length === 0 } : undefined}
+      action={isLoaded ? { label: isNew ? "Add" : isRunning ? "Save" : entry && !entry.clockOut ? "Clock Out" : "Save", onClick: isRunning ? saveClockIn : save, busy: busy === "save", disabled: busy === "delete" || !jobs || jobs.length === 0 } : undefined}
       cancelOnly={!isLoaded}
       footerStart={
         entryId &&
@@ -162,21 +192,85 @@ export function TimeEntrySheet({ entryId, shiftId, jobId: startJobId, onClose }:
           ) : isNew ? (
             <JobSelect jobs={jobs} value={jobId} onChange={setSelectedJobId} />
           ) : (
-            !entry?.clockOut && <p className="mb-4 text-sm text-muted-foreground">You’re still clocked in. Set when you finished and save to clock out at that time.</p>
+            entry &&
+            !entry.clockOut &&
+            finishing && (
+              <p className="mb-4 flex flex-wrap items-baseline gap-x-2 text-sm text-muted-foreground">
+                Set when you finished — saving clocks you out at that time.
+                <button type="button" onClick={() => setFinishing(false)} className="font-medium text-primary underline-offset-2 pointer-fine:hover:underline">
+                  Keep me clocked in
+                </button>
+              </p>
+            )
           )}
 
-          <TimeFields value={times} onChange={setTimes} maxDate={new Date()} />
+          {isRunning ? (
+            <RunningEntry times={times} onChange={setTimes} minutes={runningMinutes} onFinish={finish} />
+          ) : (
+            <>
+              <TimeFields value={times} onChange={setTimes} maxDate={new Date()} />
 
-          <SectionLabel className="mb-1.5 font-medium!">Unpaid break</SectionLabel>
-          <SegmentedControl label="Unpaid break" className="mb-5" options={BREAK_OPTIONS} value={String(breakMinutes)} onChange={(value) => setChosenBreak(Number(value))} />
+              <SectionLabel className="mb-1.5 font-medium!">Unpaid break</SectionLabel>
+              <SegmentedControl label="Unpaid break" className="mb-5" options={BREAK_OPTIONS} value={String(breakMinutes)} onChange={(value) => setChosenBreak(Number(value))} />
 
-          <div className="surface flex items-center px-4 py-3">
-            <span className="flex-1 text-sm text-muted-foreground">Paid time</span>
-            <span className="text-lg font-semibold tabular-nums">{formatDuration(paidMinutes)}</span>
-          </div>
+              <div className="surface flex items-center px-4 py-3">
+                <span className="flex-1 text-sm text-muted-foreground">Paid time</span>
+                <span className="text-lg font-semibold tabular-nums">{formatDuration(paidMinutes)}</span>
+              </div>
+            </>
+          )}
 
         </>
       )}
     </Sheet>
+  );
+}
+
+/**
+ * An entry that is still on the clock. The start can be fixed (clocked in late,
+ * forgot until later); there is no end yet, so no end field and no break — those
+ * come at clock-out. Finishing early is one press away.
+ */
+function RunningEntry({ times, onChange, minutes, onFinish }: { times: ShiftTimes; onChange: (next: ShiftTimes) => void; minutes: number; onFinish: () => void }) {
+  return (
+    <>
+      <div className="mb-4 flex items-center gap-3 rounded-xl bg-primary/10 px-4 py-3">
+        <span aria-hidden className="relative flex size-2.5 shrink-0">
+          <span className="absolute inline-flex size-full animate-ping rounded-full bg-primary opacity-60 motion-reduce:animate-none" />
+          <span className="relative inline-flex size-2.5 rounded-full bg-primary" />
+        </span>
+        <p className="min-w-0 flex-1 text-sm">
+          <span className="font-semibold">On the clock</span>
+          <span className="text-muted-foreground tabular-nums"> · {formatDuration(minutes)} so far</span>
+        </p>
+        <Timer aria-hidden className="size-4 shrink-0 text-primary" />
+      </div>
+
+      <div className="mb-1.5 grid grid-cols-2 gap-3">
+        <div className="min-w-0">
+          <label htmlFor="running-date" className="mb-1.5 block text-sm font-medium">
+            Date
+          </label>
+          <DatePicker id="running-date" value={times.date} max={new Date()} onChange={(date) => onChange({ ...times, date })} />
+        </div>
+        <div className="min-w-0">
+          <label htmlFor="running-start" className="mb-1.5 block text-sm font-medium">
+            Clocked in at
+          </label>
+          <TimePicker id="running-start" value={times.start} onChange={(start) => onChange({ ...times, start })} />
+        </div>
+      </div>
+      <p className="mb-5 text-xs text-muted-foreground">Clocked in late, or forgot to? Fix the time — you stay on the clock.</p>
+
+      <div className="surface flex items-center gap-3 px-4 py-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium">Clock-out</p>
+          <p className="text-xs text-muted-foreground">Set when you clock out. Your unpaid break is added then.</p>
+        </div>
+        <Button variant="secondary" size="sm" onClick={onFinish}>
+          I’ve Finished
+        </Button>
+      </div>
+    </>
   );
 }
