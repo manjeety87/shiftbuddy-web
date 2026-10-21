@@ -278,9 +278,22 @@ try {
     await page.waitForURL(/\/settings$/);
     await page.keyboard.press("Escape");
     await page.waitForTimeout(400);
+    await tappable(page.getByRole("link", { name: "Password & Security" })).click();
+    await page.waitForURL("**/settings#security");
+    await page.getByText("This device").waitFor();
+    await look("password & security", { whole: true });
     await panel("password", () => tappable(page.getByRole("button", { name: "Change Password" })).click());
     await page.keyboard.press("Escape");
     await page.waitForTimeout(400);
+    await tappable(page.getByRole("button", { name: "Back to Settings" })).click();
+    await page.waitForURL(/\/settings$/);
+    await tappable(page.getByRole("link", { name: "Your Data" })).click();
+    await page.waitForURL("**/settings#data");
+    await panel("delete account", () => tappable(page.getByRole("button", { name: "Delete Account…" })).click());
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(400);
+    await tappable(page.getByRole("button", { name: "Back to Settings" })).click();
+    await page.waitForURL(/\/settings$/);
     await panel("verify email", () => tappable(page.getByRole("button", { name: "Verify email" })).click());
     await page.keyboard.press("Escape");
     await page.waitForTimeout(400);
@@ -292,7 +305,8 @@ try {
   if (problems.length) report("console", problems);
 } finally {
   if (token) {
-    const gone = await context.request.delete(`${BASE}/api/auth/account`, { headers: { Authorization: `Bearer ${token}` } });
+    // Hidden at once, erased by the backend after its 30-day grace period
+    const gone = await context.request.post(`${BASE}/api/account/deletion`, { headers: { Authorization: `Bearer ${token}` }, data: { password: "Testing123" } });
     console.log(`cleanup: test account deleted (${gone.status()})`);
   }
   await browser.close();

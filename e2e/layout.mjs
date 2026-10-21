@@ -137,7 +137,8 @@ try {
   }
 } finally {
   if (token) {
-    const gone = await context.request.delete(`${BASE}/api/auth/account`, { headers: { Authorization: `Bearer ${token}` } });
+    // Hidden at once, erased by the backend after its 30-day grace period
+    const gone = await context.request.post(`${BASE}/api/account/deletion`, { headers: { Authorization: `Bearer ${token}` }, data: { password: "Testing123" } });
     console.log(`cleanup: test account deleted (${gone.status()})`);
   }
   await browser.close();

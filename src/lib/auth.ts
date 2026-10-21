@@ -74,7 +74,3 @@ export const logoutUser = async () => {
         await clearTokens();
     }
 };
-
-export const deleteAccount = async (): Promise<void> => {
-    await api.delete('/auth/account');
-};

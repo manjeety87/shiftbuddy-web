@@ -1,6 +1,6 @@
 "use client";
 
-import { BadgeCheck, ChevronRight, ClipboardList, House, LayoutDashboard, Lock, LogOut, MailWarning, Palette, Percent, Trash2, User as UserIcon, Users, type LucideIcon } from "lucide-react";
+import { BadgeCheck, ChevronRight, ClipboardList, FolderDown, House, LayoutDashboard, LogOut, MailWarning, Palette, Percent, ShieldCheck, User as UserIcon, Users, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useState, useSyncExternalStore, type FormEvent, type ReactNode } from "react";
 import { ThemePicker } from "@/components/theme/ThemePicker";
@@ -10,14 +10,15 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Switch } from "@/components/ui/Switch";
 import { errorMessage } from "@/lib/api";
-import { deleteAccount, sendVerificationCode, updateProfile } from "@/lib/auth";
+import { sendVerificationCode, updateProfile } from "@/lib/auth";
 import { ARRIVAL_BUFFER_OPTIONS } from "@/lib/commute";
-import { showAlert } from "@/lib/dialog";
 import { splitAddress } from "@/lib/geocode";
 import { notify } from "@/lib/notify";
 import { setPreference, useIsWide, usePreference } from "@/lib/preferences";
 import { useLogOut, useSession, useUser } from "@/lib/session";
 import { openSheet, type SheetRequest } from "@/lib/sheets";
+import { downloadMyData } from "./downloadMyData";
+import { SignedInDevices } from "./SignedInDevices";
 
 const COMMUTE_MODES = [
   { value: "TRANSIT", label: "Transit" },
@@ -32,7 +33,8 @@ const SECTIONS = [
   { id: "pay", label: "Pay estimates", screen: "Tax Deduction" },
   { id: "home", label: "Home page", screen: "Home Page" },
   { id: "appearance", label: "Appearance", screen: "Appearance" },
-  { id: "account", label: "Account", screen: "Account" },
+  { id: "security", label: "Password & security", screen: "Password & Security" },
+  { id: "data", label: "Your data", screen: "Your Data" },
 ] as const;
 const screenName = (id: SectionId) => SECTIONS.find((section) => section.id === id)?.screen ?? "";
 
@@ -128,11 +130,11 @@ const initials = (name: string) =>
 
 export function SettingsPage() {
   const user = useUser();
-  const { setUser, signOut } = useSession();
+  const { setUser } = useSession();
   const logOut = useLogOut();
   const [name, setName] = useState(user.name);
   const [tax, setTax] = useState(String(user.taxDeductionPercent));
-  const [saving, setSaving] = useState<"name" | "tax" | null>(null);
+  const [saving, setSaving] = useState<"name" | "tax" | "download" | null>(null);
   const showShared = usePreference("sharedOnHome") === "on";
   const open = useOpenSection();
   const isWide = useIsWide();
@@ -178,23 +180,17 @@ export function SettingsPage() {
     await sendVerificationCode().catch(() => undefined);
   };
 
-  const removeAccount = () =>
-    showAlert("Delete your account?", "Your jobs, shifts, timesheet and shares are deleted for good. This can’t be undone.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete Account",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await deleteAccount();
-            notify.success("Account deleted");
-            await signOut();
-          } catch (failure) {
-            notify.error("Couldn’t delete the account", { description: errorMessage(failure) });
-          }
-        },
-      },
-    ]);
+  const download = async () => {
+    setSaving("download");
+    try {
+      await downloadMyData();
+      notify.success("Your data is downloading");
+    } catch (failure) {
+      notify.error("Couldn’t download your data", { description: errorMessage(failure) });
+    } finally {
+      setSaving(null);
+    }
+  };
 
   return (
     <>
@@ -227,15 +223,14 @@ export function SettingsPage() {
             <MenuRow icon={Palette} label={screenName("appearance")} href="#appearance" />
             <MenuRow icon={Percent} label={screenName("pay")} detail={`${user.taxDeductionPercent}%`} href="#pay" />
             <MenuRow icon={LayoutDashboard} label={screenName("home")} href="#home" />
-            {user.hasPassword && <MenuRow icon={Lock} label="Change Password" onClick={() => openSheet({ kind: "password" })} />}
+            <MenuRow icon={ShieldCheck} label={screenName("security")} href="#security" />
+            <MenuRow icon={FolderDown} label={screenName("data")} href="#data" />
           </nav>
 
           <Button variant="danger" className="w-full shadow-[0_0_0_1px_color-mix(in_oklab,var(--destructive)_35%,transparent)]" icon={<LogOut aria-hidden className="size-4" />} onClick={logOut}>
             Log Out
           </Button>
-          <button type="button" onClick={removeAccount} className="mx-auto mt-3 mb-4 flex min-h-11 items-center gap-1.5 px-3 text-sm font-medium text-muted-foreground">
-            <Trash2 aria-hidden className="size-4" /> Delete Account
-          </button>
+          <p className="mt-3 mb-4 text-center text-xs text-muted-foreground">Signed in as {user.email}</p>
         </div>
       )}
 
@@ -317,25 +312,52 @@ export function SettingsPage() {
             </div>
           </Section>
 
-          <Section id="account" title="Account" open={open}>
-            {user.hasPassword && (
+          <Section id="security" title="Password & security" open={open} description="How you sign in, and every device that’s signed in now.">
+            {user.hasPassword ? (
               <Setting label="Password" help="Changing it signs out your other devices.">
                 <Button variant="secondary" onClick={() => openSheet({ kind: "password" })}>
                   Change Password
                 </Button>
               </Setting>
+            ) : (
+              <Setting label="Sign-in" help={`You sign in with ${user.signInMethods.apple ? "Apple" : "Google"}, so there’s no ShiftBuddy password to manage.`}>
+                <span className="text-sm text-muted-foreground">{user.signInMethods.apple ? "Apple" : "Google"}</span>
+              </Setting>
             )}
-            <Setting label="Log out" help={`Signed in as ${user.email}.`}>
-              <Button variant="secondary" onClick={logOut}>
-                Log out
+            <div className="px-4 pt-3.5 pb-3">
+              <p className="text-sm font-medium">Where you’re signed in</p>
+              <p className="mt-0.5 text-xs text-pretty text-muted-foreground">Browsers and phones with ShiftBuddy open on your account.</p>
+            </div>
+            <SignedInDevices />
+          </Section>
+
+          <Section id="data" title="Your data" open={open} description="It’s yours: take a copy, choose who sees it, or delete it.">
+            <Setting label="Download your data" help="Your profile, jobs, shifts, hours worked and sharing, as a file you can keep.">
+              <Button variant="secondary" busy={saving === "download"} onClick={download}>
+                Download
               </Button>
             </Setting>
-            <Setting label="Delete account" help="Your jobs, shifts, timesheet and shares are deleted for good.">
-              <Button variant="danger" className="shadow-[0_0_0_1px_color-mix(in_oklab,var(--destructive)_35%,transparent)]" onClick={removeAccount}>
-                Delete account
+            <Setting label="Who sees your schedule" help="People you share your shifts with, and for how long.">
+              <Link href="/sharing" className="inline-flex h-10 items-center rounded-lg bg-card px-4 text-sm font-medium shadow-card transition-[scale] duration-150 ease-out active:scale-[0.97] md:h-8 md:px-3 pointer-fine:hover:bg-raised">
+                Sharing
+              </Link>
+            </Setting>
+            <Setting label="Delete account" help="You have 30 days to change your mind. After that, everything is erased.">
+              <Button variant="danger" className="ring-1 ring-destructive/30" onClick={() => openSheet({ kind: "deleteAccount" })}>
+                Delete Account…
               </Button>
             </Setting>
           </Section>
+
+          {/* Logging out isn't a setting: it sits apart, at the end, where people look for it */}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-6 max-md:hidden">
+            <p className="text-sm text-muted-foreground">
+              Signed in as <span className="font-medium text-foreground">{user.email}</span>
+            </p>
+            <Button variant="secondary" icon={<LogOut aria-hidden className="size-4" />} onClick={logOut}>
+              Log Out
+            </Button>
+          </div>
         </div>
       </div>
     </>

@@ -24,6 +24,7 @@ export type SheetRequest =
   | { kind: "shared"; ownerId: string; ownerName: string; date?: Date }
   | { kind: "verifyEmail" }
   | { kind: "password" }
+  | { kind: "deleteAccount" }
   | { kind: "home" };
 
 export interface OpenSheet {

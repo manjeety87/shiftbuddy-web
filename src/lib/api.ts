@@ -89,7 +89,7 @@ export const refreshSession = (): Promise<string> => {
 };
 
 // On these a 401 means "wrong email/password/code", not "session expired"
-const CREDENTIAL_ENDPOINTS = ["/auth/login", "/auth/register", "/auth/google", "/auth/apple", "/auth/forgot-password", "/auth/reset-password", "/auth/change-password", "/auth/refresh-token"];
+const CREDENTIAL_ENDPOINTS = ["/auth/login", "/auth/register", "/auth/google", "/auth/apple", "/auth/restore", "/auth/forgot-password", "/auth/reset-password", "/auth/change-password", "/auth/refresh-token", "/account/deletion"];
 
 const request = async <T>(method: string, url: string, body?: unknown, options?: RequestOptions): Promise<{ data: T }> => {
   try {

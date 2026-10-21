@@ -355,10 +355,34 @@ try {
     await page.waitForURL("**/home");
   });
 
-  await step("delete the account from Settings", async () => {
+  await step("delete the account from Settings, then restore it from the login page", async () => {
     await page.goto(`${BASE}/settings`);
-    await ui.getByRole("button", { name: "Delete account" }).click();
-    await sheet().getByRole("button", { name: "Delete Account" }).click();
+    await ui.getByRole("button", { name: "Delete Account…" }).click();
+    await sheet().getByText("Deleted with your account").waitFor();
+    const confirm = sheet().getByRole("button", { name: "Delete My Account" });
+    if (await confirm.isEnabled()) throw new Error("deleting was possible without the password");
+    await sheet().getByLabel("Enter your password to confirm").fill("WrongPass1");
+    await confirm.click();
+    await sheet().getByText("That password isn’t right.").waitFor();
+    await sheet().getByLabel("Enter your password to confirm").fill(password);
+    await confirm.click();
+    await page.waitForURL("**/login");
+    await ui.getByText(/Your account will be deleted on/).waitFor();
+    await shot("17-deleted-notice");
+
+    await ui.getByLabel("Email").fill(email);
+    await ui.getByLabel("Password").fill(password);
+    await ui.getByRole("button", { name: "Log In" }).click();
+    await ui.getByRole("heading", { name: "Restore your account?" }).waitFor();
+    await shot("18-restore");
+    await ui.getByRole("button", { name: "Restore Account" }).click();
+    await page.waitForURL("**/home");
+
+    // Delete for good this time (the backend erases it after the grace period)
+    await page.goto(`${BASE}/settings`);
+    await ui.getByRole("button", { name: "Delete Account…" }).click();
+    await sheet().getByLabel("Enter your password to confirm").fill(password);
+    await sheet().getByRole("button", { name: "Delete My Account" }).click();
     await page.waitForURL("**/login");
   });
 } finally {
@@ -366,7 +390,7 @@ try {
   const login = await context.request.post(`${BASE}/api/auth/login`, { data: { email, password } });
   if (login.ok()) {
     const { data } = await login.json();
-    const gone = await context.request.delete(`${BASE}/api/auth/account`, { headers: { Authorization: `Bearer ${data.accessToken}` } });
+    const gone = await context.request.post(`${BASE}/api/account/deletion`, { headers: { Authorization: `Bearer ${data.accessToken}` }, data: { password } });
     console.log(`cleanup: the test account was still there → deleted (${gone.status()})`);
   } else {
     console.log("cleanup: the test account is gone");

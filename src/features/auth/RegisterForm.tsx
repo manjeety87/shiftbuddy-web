@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
 import { FormError, TextField } from "@/components/ui/Field";
-import { errorMessage } from "@/lib/api";
+import { errorCode, errorMessage } from "@/lib/api";
 import { registerUser } from "@/lib/auth";
 import { useSession } from "@/lib/session";
 import { openSheet } from "@/lib/sheets";
@@ -17,7 +17,7 @@ export function RegisterForm() {
   const [name, setName] = useState("");
   const { email, setEmail } = useAuthEmail();
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ReactNode>(null);
   const [busy, setBusy] = useState(false);
 
   const submit = async (event: FormEvent) => {
@@ -34,7 +34,19 @@ export function RegisterForm() {
       setPassword("");
       signIn(user);
     } catch (failure) {
-      setError(errorMessage(failure, "Couldn’t create the account. Please try again."));
+      if (errorCode(failure) === "ACCOUNT_PENDING_DELETION") {
+        setError(
+          <>
+            This email’s account is set to be deleted.{" "}
+            <Link href="/login" className={authLink}>
+              Log in
+            </Link>{" "}
+            to restore it — everything is still there.
+          </>,
+        );
+      } else {
+        setError(errorMessage(failure, "Couldn’t create the account. Please try again."));
+      }
     } finally {
       setBusy(false);
     }

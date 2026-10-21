@@ -8,6 +8,7 @@ import { ConflictSheet } from "@/features/conflicts/ConflictSheet";
 import { JobSheet } from "@/features/jobs/JobSheet";
 import { ScanSheet } from "@/features/scan/ScanSheet";
 import { HomeAddressSheet, PasswordSheet, VerifyEmailSheet } from "@/features/settings/AccountSheets";
+import { DeleteAccountSheet } from "@/features/settings/DeleteAccountSheet";
 import { SharedSheet } from "@/features/sharing/SharedSheet";
 import { CopySheet } from "@/features/shifts/CopySheet";
 import { CopyWeekSheet } from "@/features/shifts/CopyWeekSheet";
@@ -51,6 +52,8 @@ const render = (request: SheetRequest, onClose: () => void) => {
       return <VerifyEmailSheet onClose={onClose} />;
     case "password":
       return <PasswordSheet onClose={onClose} />;
+    case "deleteAccount":
+      return <DeleteAccountSheet onClose={onClose} />;
     case "home":
       return <HomeAddressSheet onClose={onClose} />;
   }
