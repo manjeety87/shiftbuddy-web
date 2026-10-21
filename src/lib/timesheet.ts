@@ -24,7 +24,9 @@ export interface Timesheet {
     /** Calendar days ("YYYY-MM-DD"); `end` is the last day covered */
     period: { start: string; end: string; payday: string | null; offset: number };
     entries: TimesheetEntry[];
-    totals: { entryCount: number; paidMinutes: number; breakMinutes: number; grossPay: number | null };
+    /** `estimatedPay`: gross less the user's deduction estimate (`taxDeductionPercent`) */
+    totals: { entryCount: number; paidMinutes: number; breakMinutes: number; grossPay: number | null; estimatedPay?: number | null };
+    taxDeductionPercent?: number;
 }
 
 const timesheetChanged = createChangeSignal();
@@ -52,7 +54,7 @@ export const createTimeEntry = async (entry: ({ jobId: string } | { shiftId: str
 
 type TimesheetJob = Timesheet['job'];
 
-/** Every job together for one calendar week (Sunday–Saturday). */
+/** Every job together for a stretch of days (the shape `HoursSummary` builds on). */
 export interface WeekTimesheet {
     period: { start: string; end: string; offset: number };
     entries: (TimesheetEntry & { job: Job })[];
@@ -61,9 +63,23 @@ export interface WeekTimesheet {
     totals: Timesheet['totals'] & { missingRates: boolean };
 }
 
-/** `offset` 0 = this week, -1 = last week. */
-export const getWeekTimesheet = async (offset: number): Promise<WeekTimesheet> =>
-    (await api.get<{ data: WeekTimesheet }>('/timesheet/week', { params: { offset, timeZone: deviceTimeZone() } })).data.data;
+/** How far back the hours summary looks: a Sun–Sat week, this week and last, a calendar month, or everything. */
+export type SummaryRange = 'week' | 'twoWeeks' | 'month' | 'all';
+
+/** Every job's hours and pay for a range (`GET /timesheet/summary`). `range: 'all'` sends no entries. */
+export interface HoursSummary {
+    range: SummaryRange;
+    /** For `all`: `start` is the first day with hours (null when none) and `end` is null */
+    period: { start: string | null; end: string | null; offset: number };
+    entries: WeekTimesheet['entries'];
+    byJob: (WeekTimesheet['byJob'][number] & { estimatedPay: number | null })[];
+    totals: WeekTimesheet['totals'] & { estimatedPay: number | null };
+    taxDeductionPercent: number;
+}
+
+/** `offset` 0 = the range today is in, -1 = the one before. */
+export const getHoursSummary = async (range: SummaryRange, offset: number): Promise<HoursSummary> =>
+    (await api.get<{ data: HoursSummary }>('/timesheet/summary', { params: { range, offset, timeZone: deviceTimeZone() } })).data.data;
 
 export const clockOut = async (): Promise<TimeEntry> => {
     const { data } = await api.post<{ data: TimeEntry }>('/timesheet/clock-out');
