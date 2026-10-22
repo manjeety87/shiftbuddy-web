@@ -31,7 +31,7 @@ const render = (request: SheetRequest, onClose: () => void) => {
     case "copyWeek":
       return <CopyWeekSheet shifts={request.shifts} weekStart={request.weekStart} onClose={onClose} />;
     case "route":
-      return <RouteSheet shiftId={request.shiftId} onClose={onClose} />;
+      return <RouteSheet shiftId={request.shiftId} from={request.from} onClose={onClose} />;
     case "weather":
       return <WeatherSheet shiftId={request.shiftId} onClose={onClose} />;
     case "conflict":

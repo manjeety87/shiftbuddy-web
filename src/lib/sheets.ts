@@ -2,6 +2,7 @@
 
 import { useEffect, useSyncExternalStore } from "react";
 import type { Shift } from "@/interfaces/shift.d";
+import type { StartChoice } from "./commute";
 
 // Panels that open over a page (the mobile app's "sheets"). Anything can ask for
 // one with `openSheet`; `SheetHost` in the app layout draws the stack. A sheet can
@@ -13,7 +14,7 @@ export type SheetRequest =
   | { kind: "timeEntry"; entryId?: string; shiftId?: string; jobId?: string }
   | { kind: "copy"; shiftIds: string[] }
   | { kind: "copyWeek"; shifts: Shift[]; weekStart: Date }
-  | { kind: "route"; shiftId: string }
+  | { kind: "route"; shiftId: string; from?: StartChoice }
   | { kind: "weather"; shiftId: string }
   | { kind: "conflict"; conflict: "overlap" | "travel"; fromId: string; toId: string }
   | { kind: "scan" }

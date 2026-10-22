@@ -1,6 +1,6 @@
 "use client";
 
-import { Bus, ChevronDown, ChevronRight, ExternalLink, Footprints, House, LocateFixed, Ship, TrainFront, TramFront } from "lucide-react";
+import { Briefcase, Bus, ChevronDown, ChevronRight, ExternalLink, Footprints, House, LocateFixed, Ship, TrainFront, TramFront } from "lucide-react";
 import { useState } from "react";
 import { MapView, type MapLine } from "@/components/MapView";
 import { Button } from "@/components/ui/Button";
@@ -9,7 +9,7 @@ import { Sheet } from "@/components/ui/Sheet";
 import { LoadError, SkeletonRows } from "@/components/ui/States";
 import { HttpError } from "@/lib/api";
 import { readableTextOn } from "@/lib/color";
-import { getShiftRoutes } from "@/lib/commute";
+import { getShiftRoutes, type StartChoice } from "@/lib/commute";
 import { formatTime } from "@/lib/dateUtils";
 import { splitAddress } from "@/lib/geocode";
 import { jobName } from "@/lib/jobLabels";
@@ -197,10 +197,12 @@ const note = "surface px-4 py-6 text-center text-sm text-pretty text-muted-foreg
  * drive. Every time here comes from the backend, so the phone app agrees.
  * With room, the map stays on the left while the trips scroll on the right.
  */
-export function RouteSheet({ shiftId, onClose }: { shiftId: string; onClose: () => void }) {
+export function RouteSheet({ shiftId, from: startFrom = "auto", onClose }: { shiftId: string; from?: StartChoice; onClose: () => void }) {
   const user = useUser();
   const [mode, setMode] = useState<Mode>(user.commuteMode);
   const [here, setHere] = useState<Coords | null>(null);
+  // Where the trip starts when it isn't "where I am": the shift just before (the backend's default), or home
+  const [start, setStart] = useState<StartChoice>(startFrom);
   const [locating, setLocating] = useState(false);
   const [locateError, setLocateError] = useState<string | null>(null);
   const [onMap, setOnMap] = useState(0);
@@ -210,7 +212,7 @@ export function RouteSheet({ shiftId, onClose }: { shiftId: string; onClose: () 
   const { data: shift } = useFetch(() => getShiftById(shiftId), [shiftId]);
   const routes = useFetch(async () => {
     try {
-      const found = await getShiftRoutes(shiftId, here ?? undefined);
+      const found = await getShiftRoutes(shiftId, { here: here ?? undefined, from: start });
       setProblem(null);
       return found;
     } catch (failure) {
@@ -218,13 +220,19 @@ export function RouteSheet({ shiftId, onClose }: { shiftId: string; onClose: () 
       setProblem(details?.code ?? null);
       throw failure;
     }
-  }, [shiftId, here?.lat, here?.lng]);
+  }, [shiftId, here?.lat, here?.lng, start]);
 
-  const startFrom = (from: Coords | null) => {
+  const restart = (change: () => void) => {
     setOnMap(0);
     setOpen(null);
-    setHere(from);
+    change();
   };
+  const startAt = (from: Coords | null) => restart(() => setHere(from));
+  const startFromPlace = (choice: StartChoice) =>
+    restart(() => {
+      setHere(null);
+      setStart(choice);
+    });
   const useMyLocation = () => {
     if (!navigator.geolocation) return setLocateError("This browser can’t share its location.");
     setLocating(true);
@@ -232,7 +240,7 @@ export function RouteSheet({ shiftId, onClose }: { shiftId: string; onClose: () 
     navigator.geolocation.getCurrentPosition(
       (position) => {
         setLocating(false);
-        startFrom({ lat: position.coords.latitude, lng: position.coords.longitude });
+        startAt({ lat: position.coords.latitude, lng: position.coords.longitude });
       },
       () => {
         setLocating(false);
@@ -247,7 +255,17 @@ export function RouteSheet({ shiftId, onClose }: { shiftId: string; onClose: () 
   const returnTrip = data?.transit.status === "ok" ? data.transit.toHome[0] : undefined;
   const tripOnMap = trips[Math.min(onMap, trips.length - 1)] as TransitItinerary | undefined;
   const destination = shift ? jobName(shift.job) : "Work";
-  const leaveLabel = data?.fromHome ? "Leave home by" : "Leave by";
+  const startKind = here ? "here" : data?.from.kind;
+  const leaveLabel = startKind === "home" ? "Leave home by" : startKind === "previousShift" ? `Leave ${data?.from.name} by` : "Leave by";
+  const startName = startKind === "previousShift" ? data?.from.name : startKind === "home" ? "Home" : "Where you are";
+  // The other place the trip could start from — one link, so the row stays a row, not a second toggle
+  const switchTo: { label: string; run: () => void } | null = here
+    ? { label: data?.previousShift && start !== "home" ? `Use ${data.previousShift.name}` : "Use home", run: () => startAt(null) }
+    : startKind === "previousShift" && data?.hasHome
+      ? { label: "From home?", run: () => startFromPlace("home") }
+      : startKind === "home" && data?.previousShift
+        ? { label: `From ${data.previousShift.name}`, run: () => startFromPlace("previousShift") }
+        : null;
 
   const lines: MapLine[] =
     mode === "DRIVING" ? (data?.driving ? [{ points: data.driving.geometry }] : []) : (tripOnMap?.legs.map((leg) => ({ points: leg.geometry, color: isWalk(leg) ? WALK_COLOUR : (leg.color ?? undefined), dashed: isWalk(leg) })) ?? []);
@@ -259,7 +277,7 @@ export function RouteSheet({ shiftId, onClose }: { shiftId: string; onClose: () 
     : [];
   const mapsLink = (kind: "driving" | "transit", text: string) =>
     data && (
-      <a href={directionsUrl(data.destination, kind, here ?? undefined)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm font-medium text-primary underline-offset-2 pointer-fine:hover:underline">
+      <a href={directionsUrl(data.destination, kind, here ?? (data.from.kind === "previousShift" ? data.origin : undefined))} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm font-medium text-primary underline-offset-2 pointer-fine:hover:underline">
         {text} <ExternalLink aria-hidden className="size-3.5" />
       </a>
     );
@@ -271,16 +289,40 @@ export function RouteSheet({ shiftId, onClose }: { shiftId: string; onClose: () 
         <div className="flex min-w-0 flex-col gap-3 md:sticky md:top-0">
           <SegmentedControl label="How you travel" options={MODES} value={mode} onChange={setMode} />
 
-          {/* A setting that rarely changes is a row with a link, not a second toggle */}
-          <div className="surface flex items-center gap-2.5 px-3.5 py-2.5">
-            {here ? <LocateFixed aria-hidden className="size-4 shrink-0 text-muted-foreground" /> : <House aria-hidden className="size-4 shrink-0 text-muted-foreground" />}
-            <div className="min-w-0 flex-1">
-              <p className={label}>From</p>
-              <p className="truncate text-sm font-medium">{here ? "Where you are now" : user.homeLocation ? `Home · ${splitAddress(user.homeLocation.address).title}` : "Home"}</p>
+          {/* Where the trip starts: a row with one link to the other place, not a second toggle. The shift
+              just before is the default — you're already out — and home is one press away for "what if". */}
+          <div className="surface px-3.5 py-2.5">
+            <div className="flex items-center gap-2.5">
+              {startKind === "here" ? (
+                <LocateFixed aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+              ) : startKind === "previousShift" ? (
+                <Briefcase aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+              ) : (
+                <House aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+              )}
+              <div key={startKind} className="min-w-0 flex-1 transition-[opacity,filter] duration-150 ease-out starting:opacity-0 starting:blur-[2px]">
+                <p className={label}>From</p>
+                <p className="truncate text-sm font-medium">
+                  {startKind === "here"
+                    ? "Where you are now"
+                    : startKind === "previousShift" && data
+                      ? `${data.from.name} · your shift before${data.from.endsAt ? ` ends ${formatTime(data.from.endsAt)}` : ""}`
+                      : user.homeLocation
+                        ? `Home · ${splitAddress(user.homeLocation.address).title}`
+                        : "Home"}
+                </p>
+              </div>
+              {switchTo && (
+                <button type="button" className="shrink-0 rounded-md px-1.5 py-1 text-sm font-medium text-primary transition-[scale] duration-150 ease-out active:scale-[0.97]" onClick={switchTo.run}>
+                  {switchTo.label}
+                </button>
+              )}
             </div>
-            <button type="button" className="shrink-0 text-sm font-medium text-primary disabled:opacity-60" disabled={locating} onClick={here ? () => startFrom(null) : useMyLocation}>
-              {here ? "Use home" : locating ? "Finding you…" : "Use my location"}
-            </button>
+            {!here && (
+              <button type="button" className="mt-1.5 ml-6.5 text-xs font-medium text-muted-foreground disabled:opacity-60 pointer-fine:hover:text-foreground" disabled={locating} onClick={useMyLocation}>
+                {locating ? "Finding you…" : "Or start from where you are now"}
+              </button>
+            )}
           </div>
           {locateError && <p className="text-sm text-destructive">{locateError}</p>}
 
@@ -328,6 +370,20 @@ export function RouteSheet({ shiftId, onClose }: { shiftId: string; onClose: () 
             <LoadError message={routes.error} onRetry={routes.retry} />
           ) : !data ? (
             <SkeletonRows rows={3} />
+          ) : data.walking ? (
+            <div className="surface px-4 py-3.5">
+              <p className={label}>{leaveLabel}</p>
+              <p className="mt-0.5 text-2xl font-bold text-primary tabular-nums">{formatTime(data.walking.leaveBy)}</p>
+              <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground">
+                <Footprints aria-hidden className="size-4" />
+                {data.walking.durationMinutes} min walk — close enough that there’s no bus or drive to plan.
+              </p>
+              {data.from.endsAt && Date.parse(data.walking.leaveBy) < Date.parse(data.from.endsAt) && (
+                <p className="mt-2 text-sm text-warning-ink">
+                  {data.from.name} ends at {formatTime(data.from.endsAt)}, so leave as soon as it does.
+                </p>
+              )}
+            </div>
           ) : mode === "DRIVING" ? (
             data.driving ? (
               <>
@@ -372,7 +428,7 @@ export function RouteSheet({ shiftId, onClose }: { shiftId: string; onClose: () 
                       setOpen((current) => (current === index ? null : index));
                     }}
                     leaveLabel={leaveLabel}
-                    start={data.fromHome ? "Home" : "Where you are"}
+                    start={startName ?? "Start"}
                     destination={destination}
                   />
                 ))}

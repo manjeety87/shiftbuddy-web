@@ -12,7 +12,7 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { LoadError, SkeletonRows } from "@/components/ui/States";
 import type { Shift } from "@/interfaces/shift.d";
 import { errorMessage } from "@/lib/api";
-import { getLeavePlan, summarizeLeavePlan } from "@/lib/commute";
+import { getLeavePlan, summarizeLeavePlan, type StartChoice } from "@/lib/commute";
 import { getConflicts } from "@/lib/conflicts";
 import { formatCountdown, formatTime, getWeekDays, isSameDay } from "@/lib/dateUtils";
 import { addDays, formatDayLabel, startOfDay } from "@/lib/inputs";
@@ -144,11 +144,86 @@ function ClockedInCard({ entry, now }: { entry: TimeEntry; now: number }) {
   );
 }
 
+/**
+ * When to leave for the next shift, and from where. The backend starts from the
+ * shift just before when there is one (you're already out — Boathouse, then the
+ * shop across the mall), otherwise from home. "From home?" asks the what-if for
+ * this shift only; the row's words cross-fade so the swap reads as one change.
+ */
+function LeaveRow({ shift, hasJobPin }: { shift: Shift; hasJobPin: boolean }) {
+  const user = useUser();
+  const [from, setFrom] = useState<StartChoice>("auto");
+  // The shift before's name, kept for the "back" link while looking at home
+  const [backTo, setBackTo] = useState<string | null>(null);
+  const { data: plan, isLoading } = useFetch(
+    () => getLeavePlan(shift.id, from).catch(() => null),
+    [shift.id, from, shift.startTime, user.commuteMode, user.arrivalBufferMinutes, user.homeLocation?.address],
+  );
+
+  const kind = plan?.from.kind;
+  const headline = !plan
+    ? null
+    : plan.sameBuilding
+      ? `Same building — head over by ${formatTime(plan.arriveBy)}`
+      : plan.leavesAsShiftEnds
+        ? `Leave ${plan.from.name} as it ends, ${formatTime(plan.leaveAt)}`
+        : kind === "previousShift"
+          ? `Leave ${plan.from.name} by ${formatTime(plan.leaveAt)}`
+          : `Leave home by ${formatTime(plan.leaveAt)}`;
+  const detail = !plan
+    ? null
+    : plan.sameBuilding
+      ? `After your ${plan.from.name} shift`
+      : plan.lateMinutes > 0
+        ? `${summarizeLeavePlan(plan)} · about ${plan.lateMinutes} min late`
+        : summarizeLeavePlan(plan);
+  // The other starting point, offered as a small what-if under the row
+  const other = plan?.alternatives.includes("home") ? "home" : plan?.alternatives.includes("previousShift") ? "previousShift" : null;
+
+  return (
+    <div className="flex flex-col gap-1">
+      <button
+        type="button"
+        onClick={() => openSheet(plan || (hasJobPin && user.homeLocation) ? { kind: "route", shiftId: shift.id, from } : hasJobPin ? { kind: "home" } : { kind: "job", jobId: shift.jobId })}
+        className="flex min-h-14 items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-left ring-1 ring-primary-foreground/30 transition-[scale,background-color] duration-150 ease-out ring-inset active:scale-[0.98] pointer-fine:hover:bg-primary-well"
+      >
+        {plan ? <DoorOpen aria-hidden className="size-4.5 shrink-0" /> : <Navigation aria-hidden className="size-4.5 shrink-0" />}
+        <span className="min-w-0 flex-1">
+          {plan ? (
+            // A new key per starting point: the words fade in (150 ms, a 2 px blur bridges old and new)
+            <span key={`${kind}-${plan.leaveAt}`} className="block transition-[opacity,filter] duration-150 ease-out starting:opacity-0 starting:blur-[2px] motion-reduce:starting:blur-none">
+              <span className="block text-[0.9375rem] font-semibold text-pretty tabular-nums">{headline}</span>
+              <span className={`block truncate text-xs ${plan.lateMinutes > 0 ? "font-semibold" : ""}`}>{detail}</span>
+            </span>
+          ) : isLoading ? (
+            <Spinner className="size-4" />
+          ) : (
+            <span className="block text-sm font-semibold text-pretty">
+              {!hasJobPin ? "Pin this job on the map to see when to leave" : !user.homeLocation ? "Add your home address to see when to leave" : "Plan your route"}
+            </span>
+          )}
+        </span>
+        <ChevronRight aria-hidden className="size-4.5 shrink-0 opacity-70" />
+      </button>
+      {other && (
+        <button
+          type="button"
+          onClick={() => {
+            if (other === "home" && plan) setBackTo(plan.from.name);
+            setFrom(other);
+          }}
+          className="self-end rounded-md px-2 py-1.5 text-xs font-semibold underline-offset-2 transition-[scale] duration-150 ease-out active:scale-[0.97] pointer-fine:hover:underline"
+        >
+          {other === "home" ? "From home?" : `From ${backTo ?? "your shift before"}`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** The next shift on any day: when, how long until, the weather, when to leave, and the clock. */
 function UpcomingShiftCard({ shift, now, isClockedIn }: { shift: Shift; now: number; isClockedIn: boolean }) {
-  const user = useUser();
   const [busy, setBusy] = useState(false);
-  const { data: plan, isLoading: isPlanning } = useFetch(() => getLeavePlan(shift.id).catch(() => null), [shift.id, shift.startTime, user.commuteMode, user.arrivalBufferMinutes, user.homeLocation?.address]);
   const { data: weather } = useFetch(() => getShiftWeather(shift.id).catch(() => null), [shift.id, shift.startTime]);
 
   const start = Date.parse(shift.startTime);
@@ -220,28 +295,19 @@ function UpcomingShiftCard({ shift, now, isClockedIn }: { shift: Shift; now: num
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => openSheet(plan || (hasJobPin && user.homeLocation) ? { kind: "route", shiftId: shift.id } : hasJobPin ? { kind: "home" } : { kind: "job", jobId: shift.jobId })}
-          className="flex min-h-14 items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-left ring-1 ring-primary-foreground/30 transition-[scale,background-color] duration-150 ease-out ring-inset active:scale-[0.98] pointer-fine:hover:bg-primary-well"
-        >
-          {plan ? <DoorOpen aria-hidden className="size-4.5 shrink-0" /> : <Navigation aria-hidden className="size-4.5 shrink-0" />}
-          <span className="min-w-0 flex-1">
-            {plan ? (
-              <>
-                <span className="block text-[0.9375rem] font-semibold tabular-nums">Leave home by {formatTime(plan.leaveAt)}</span>
-                <span className="block truncate text-xs">{summarizeLeavePlan(plan)}</span>
-              </>
-            ) : isPlanning ? (
-              <Spinner className="size-4" />
-            ) : (
-              <span className="block text-sm font-semibold text-pretty">
-                {!hasJobPin ? "Pin this job on the map to see when to leave" : !user.homeLocation ? "Add your home address to see when to leave" : "Plan your route"}
-              </span>
-            )}
-          </span>
-          <ChevronRight aria-hidden className="size-4.5 shrink-0 opacity-70" />
-        </button>
+        {/* Before the shift: when to leave, and from where. Once it has started there's nowhere to go — say when it ends */}
+        {hasStarted || isClockedIn ? (
+          <div className="flex min-h-14 items-center gap-2.5 rounded-xl px-3.5 py-2.5 ring-1 ring-primary-foreground/30 ring-inset">
+            <Timer aria-hidden className="size-4.5 shrink-0" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-[0.9375rem] font-semibold tabular-nums">Ends at {formatTime(shift.endTime)}</span>
+              <span className="block truncate text-xs">{Date.parse(shift.endTime) > now ? `${formatCountdown(shift.endTime)} left` : "Finished"}</span>
+            </span>
+          </div>
+        ) : (
+          // Keyed by shift: "From home?" is a what-if for this one shift, never carried to the next
+          <LeaveRow key={shift.id} shift={shift} hasJobPin={hasJobPin} />
+        )}
 
         {canClockIn ? (
           // The card's one solid button: starting the clock is what the user is here for once the shift comes
