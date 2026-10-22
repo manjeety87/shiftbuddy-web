@@ -7,8 +7,8 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Sheet, type SheetHandle } from "@/components/ui/Sheet";
 import { notify } from "@/lib/notify";
 import { openSheet } from "@/lib/sheets";
-import { COLLECTIONS, CUSTOM_LABEL, CUSTOM_THEME, MODES, THEMES, type LookName, type ResolvedMode, type ThemeName } from "@/lib/themes";
-import { discardPreview, previewCheckpoint, previewLook, savePreview, useCustomTheme, useIsPreviewing, useMode, useResolvedMode, useTheme } from "./useTheme";
+import { COLLECTIONS, CUSTOM_LABEL, CUSTOM_THEME, MODES, TEXT_SIZES, THEMES, type LookName, type ResolvedMode, type ThemeName } from "@/lib/themes";
+import { discardPreview, previewCheckpoint, previewLook, savePreview, useCustomTheme, useIsPreviewing, useMode, useResolvedMode, useTextSize, useTheme } from "./useTheme";
 
 const ORIGINALS = THEMES.filter((theme) => theme.collection === "original");
 const MORE = THEMES.filter((theme) => theme.collection !== "original");
@@ -57,6 +57,7 @@ export function ThemePicker() {
         detail={usingMore ? `Using ${lookLabel(current)}` : `${MORE.length} more in Apple-inspired and Elegant`}
       />
       <CustomRow />
+      <TextSizeControl />
 
       <PreviewBar />
     </div>
@@ -111,14 +112,20 @@ function PreviewBar() {
   const previewing = useIsPreviewing();
   const current = useTheme();
   const mode = useMode();
+  const textSize = useTextSize();
   if (!previewing) return null;
 
   const modeLabel = MODES.find((option) => option.value === mode)?.label ?? "";
+  const sizeLabel = textSize === "medium" ? "" : ` · ${TEXT_SIZES.find((option) => option.value === textSize)?.label} text`;
   return (
     <div role="status" className="sticky bottom-3 z-10 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl bg-card px-3.5 py-2.5 shadow-pop max-md:bottom-[calc(4.5rem+env(safe-area-inset-bottom))]">
       <p className="min-w-0 flex-1 text-sm">
         <span className="font-medium">Previewing {lookLabel(current)}</span>
-        <span className="text-muted-foreground"> · {modeLabel} · not saved</span>
+        <span className="text-muted-foreground">
+          {" "}
+          · {modeLabel}
+          {sizeLabel} · not saved
+        </span>
       </p>
       <div className="flex shrink-0 gap-2">
         <Button variant="secondary" onClick={discardPreview}>
@@ -198,6 +205,20 @@ export function ThemesSheet({ onClose }: { onClose: () => void }) {
         </div>
       </section>
     </Sheet>
+  );
+}
+
+/** Small · Default · Large — the phone app's text size, here scaling the whole page (it's all in rem). */
+function TextSizeControl() {
+  const size = useTextSize();
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-border pt-4">
+      <div>
+        <p className="text-sm font-medium">Text size</p>
+        <p className="text-xs text-pretty text-muted-foreground">Everything grows or shrinks together.</p>
+      </div>
+      <SegmentedControl label="Text size" options={TEXT_SIZES} value={size} onChange={(value) => previewLook({ textSize: value })} className="w-full sm:w-64" />
+    </div>
   );
 }
 

@@ -37,6 +37,17 @@ export const MODES = [
   { value: "dark", label: "Dark" },
 ] as const;
 
+/** Text size, the same three steps as the phone app (Small 90%, Default, Large 115%) */
+export const TEXT_SIZES = [
+  { value: "small", label: "Small" },
+  { value: "medium", label: "Default" },
+  { value: "large", label: "Large" },
+] as const;
+export type TextSize = (typeof TEXT_SIZES)[number]["value"];
+export const DEFAULT_TEXT_SIZE: TextSize = "medium";
+export const TEXT_SIZE_STORAGE_KEY = "shiftbuddy.textSize";
+export const isTextSize = (value: unknown): value is TextSize => TEXT_SIZES.some((size) => size.value === value);
+
 export type ThemeName = (typeof THEMES)[number]["name"];
 export type ThemeMode = (typeof MODES)[number]["value"];
 /** What is on the page once "system" has been answered */
@@ -72,4 +83,4 @@ export const THEME_BOOT_SCRIPT = `(function(){try{var d=document.documentElement
   LEGACY_DARK_THEME,
 )}){t=${JSON.stringify(DEFAULT_THEME)};m=m||"dark"}if(${JSON.stringify(THEMES.map((theme) => theme.name))}.indexOf(t)>-1||(t===${JSON.stringify(CUSTOM_THEME)}&&ok))d.setAttribute("data-theme",t);if(m!=="light"&&m!=="dark")m=matchMedia(${JSON.stringify(
   DARK_QUERY,
-)}).matches?"dark":"light";d.setAttribute("data-mode",m)}catch(e){}})()`;
+)}).matches?"dark":"light";d.setAttribute("data-mode",m);var z=s.getItem(${JSON.stringify(TEXT_SIZE_STORAGE_KEY)});if(z==="small"||z==="large")d.setAttribute("data-text-size",z)}catch(e){}})()`;

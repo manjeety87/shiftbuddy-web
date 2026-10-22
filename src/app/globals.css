@@ -756,6 +756,14 @@
   --text-5xl--letter-spacing: -0.028em;
 }
 
+/* Text size (Appearance), the same three steps as the phone app. Everything is sized in rem, so it all scales together. */
+html[data-text-size="small"] {
+  font-size: 90%;
+}
+html[data-text-size="large"] {
+  font-size: 115%;
+}
+
 html {
   font-optical-sizing: auto;
   -webkit-text-size-adjust: 100%;

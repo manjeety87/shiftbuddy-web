@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { CUSTOM_STORAGE_KEY, CUSTOM_VARIABLES, customThemeVariables, parseCustomTheme, type CustomTheme } from "@/lib/customTheme";
-import { CUSTOM_THEME, DARK_QUERY, DEFAULT_MODE, DEFAULT_THEME, isLookName, isThemeMode, LEGACY_DARK_THEME, MODE_STORAGE_KEY, THEME_STORAGE_KEY, type LookName, type ResolvedMode, type ThemeMode } from "@/lib/themes";
+import { CUSTOM_THEME, DARK_QUERY, DEFAULT_MODE, DEFAULT_TEXT_SIZE, DEFAULT_THEME, isLookName, isTextSize, isThemeMode, LEGACY_DARK_THEME, MODE_STORAGE_KEY, TEXT_SIZE_STORAGE_KEY, THEME_STORAGE_KEY, type LookName, type ResolvedMode, type TextSize, type ThemeMode } from "@/lib/themes";
 
 // The look lives on <html data-theme data-mode> (set before paint by the boot
 // script) and in localStorage. This file is the only writer, so every reader
@@ -16,6 +16,7 @@ import { CUSTOM_THEME, DARK_QUERY, DEFAULT_MODE, DEFAULT_THEME, isLookName, isTh
 export interface Look {
   theme: LookName;
   mode: ThemeMode;
+  textSize: TextSize;
 }
 
 const listeners = new Set<() => void>();
@@ -59,8 +60,15 @@ const savedMode = (): ThemeMode => {
   return read(THEME_STORAGE_KEY) === LEGACY_DARK_THEME ? "dark" : DEFAULT_MODE;
 };
 
+const savedTextSize = (): TextSize => {
+  if (memory.textSize) return memory.textSize;
+  const saved = read(TEXT_SIZE_STORAGE_KEY);
+  return isTextSize(saved) ? saved : DEFAULT_TEXT_SIZE;
+};
+
 const shownTheme = (): LookName => preview?.theme ?? savedTheme();
 const shownMode = (): ThemeMode => preview?.mode ?? savedMode();
+const shownTextSize = (): TextSize => preview?.textSize ?? savedTextSize();
 
 const resolve = (mode: ThemeMode): ResolvedMode => (mode === "system" ? (window.matchMedia(DARK_QUERY).matches ? "dark" : "light") : mode);
 const currentResolvedMode = (): ResolvedMode => (root().dataset.mode === "dark" ? "dark" : "light");
@@ -75,6 +83,9 @@ const paintCustom = () => {
 const paint = () => {
   root().dataset.theme = shownTheme();
   root().dataset.mode = resolve(shownMode());
+  const textSize = shownTextSize();
+  if (textSize === DEFAULT_TEXT_SIZE) delete root().dataset.textSize;
+  else root().dataset.textSize = textSize;
   listeners.forEach((listener) => listener());
 };
 
@@ -83,11 +94,12 @@ const subscribe = (listener: () => void) => {
   const onStorage = (event: StorageEvent) => {
     if (event.key === THEME_STORAGE_KEY && isLookName(event.newValue)) memory.theme = event.newValue;
     if (event.key === MODE_STORAGE_KEY && isThemeMode(event.newValue)) memory.mode = event.newValue;
+    if (event.key === TEXT_SIZE_STORAGE_KEY && isTextSize(event.newValue)) memory.textSize = event.newValue;
     if (event.key === CUSTOM_STORAGE_KEY) {
       customRaw = event.newValue;
       paintCustom();
     }
-    if (event.key === THEME_STORAGE_KEY || event.key === MODE_STORAGE_KEY || event.key === CUSTOM_STORAGE_KEY) paint();
+    if (event.key === THEME_STORAGE_KEY || event.key === MODE_STORAGE_KEY || event.key === TEXT_SIZE_STORAGE_KEY || event.key === CUSTOM_STORAGE_KEY) paint();
   };
   // The device went dark (or light) while the page is open: "Auto" follows it
   const device = window.matchMedia(DARK_QUERY);
@@ -105,6 +117,7 @@ const save = (look: Look) => {
   memory = { ...look };
   write(THEME_STORAGE_KEY, look.theme);
   write(MODE_STORAGE_KEY, look.mode);
+  write(TEXT_SIZE_STORAGE_KEY, look.textSize);
   preview = null;
   saves += 1;
   paint();
@@ -112,8 +125,8 @@ const save = (look: Look) => {
 
 /** Show a theme or a mode on the whole page without saving it. */
 export const previewLook = (change: Partial<Look>) => {
-  preview = { theme: shownTheme(), mode: shownMode(), ...change };
-  if (preview.theme === savedTheme() && preview.mode === savedMode()) preview = null;
+  preview = { theme: shownTheme(), mode: shownMode(), textSize: shownTextSize(), ...change };
+  if (preview.theme === savedTheme() && preview.mode === savedMode() && preview.textSize === savedTextSize()) preview = null;
   paint();
 };
 
@@ -143,20 +156,22 @@ export const previewCheckpoint = () => {
 };
 
 /** Straight to saved, for an explicit command (the Ctrl K search) rather than a picker. */
-export const setTheme = (theme: LookName) => save({ theme, mode: shownMode() });
+export const setTheme = (theme: LookName) => save({ theme, mode: shownMode(), textSize: shownTextSize() });
 
 /** Save their own colours and switch to them, keeping the light/dark choice on screen. */
 export const saveCustomTheme = (theme: CustomTheme) => {
   customRaw = JSON.stringify(customThemeVariables(theme));
   write(CUSTOM_STORAGE_KEY, customRaw);
   paintCustom();
-  save({ theme: CUSTOM_THEME, mode: shownMode() });
+  save({ theme: CUSTOM_THEME, mode: shownMode(), textSize: shownTextSize() });
 };
 
 /** The theme on the page, preview included. On the server it is the default; the saved one follows on hydration. */
 export const useTheme = () => useSyncExternalStore(subscribe, shownTheme, () => DEFAULT_THEME);
 /** The light/dark choice on the page: "system", "light" or "dark". */
 export const useMode = () => useSyncExternalStore(subscribe, shownMode, () => DEFAULT_MODE);
+/** The text size on the page, preview included. */
+export const useTextSize = () => useSyncExternalStore(subscribe, shownTextSize, () => DEFAULT_TEXT_SIZE);
 /** What is on the page now: "light" or "dark". */
 export const useResolvedMode = () => useSyncExternalStore(subscribe, currentResolvedMode, (): ResolvedMode => "light");
 /** True while something is previewed and not saved. */
