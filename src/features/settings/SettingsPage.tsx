@@ -11,7 +11,7 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Switch } from "@/components/ui/Switch";
 import { errorMessage } from "@/lib/api";
 import { sendVerificationCode, updateProfile } from "@/lib/auth";
-import { ARRIVAL_BUFFER_OPTIONS } from "@/lib/commute";
+import { ARRIVAL_BUFFER_MAX_MINUTES, ARRIVAL_BUFFER_OPTIONS, arrivalBufferChoice, describeArriveByExample, type ArrivalBufferChoice } from "@/lib/commute";
 import { splitAddress } from "@/lib/geocode";
 import { notify } from "@/lib/notify";
 import { setPreference, useIsWide, usePreference } from "@/lib/preferences";
@@ -139,7 +139,10 @@ export function SettingsPage() {
   const logOut = useLogOut();
   const [name, setName] = useState(user.name);
   const [tax, setTax] = useState(String(user.taxDeductionPercent));
-  const [saving, setSaving] = useState<"name" | "tax" | "download" | null>(null);
+  const [saving, setSaving] = useState<"name" | "tax" | "arrival" | "download" | null>(null);
+  // Custom stays picked while its minutes are typed; they save with Save, like the other typed fields
+  const [isCustomArrival, setIsCustomArrival] = useState(arrivalBufferChoice(user.arrivalBufferMinutes) === "custom");
+  const [arrival, setArrival] = useState(isCustomArrival ? String(user.arrivalBufferMinutes) : "");
   const showShared = usePreference("sharedOnHome") === "on";
   const showGuide = usePreference("gettingStarted") === "shown";
   const showCalendarSummary = usePreference("calendarSummary") === "on";
@@ -178,6 +181,19 @@ export function SettingsPage() {
     event.preventDefault();
     setSaving("tax");
     await apply({ taxDeductionPercent: taxValue }, "Deductions saved");
+    setSaving(null);
+  };
+
+  const chooseArrival = (choice: ArrivalBufferChoice) => {
+    setIsCustomArrival(choice === "custom");
+    if (choice !== "custom") apply({ arrivalBufferMinutes: Number(choice) });
+  };
+  const arrivalValue = Number(arrival);
+  const arrivalError = /^\d+$/.test(arrival) && arrivalValue <= ARRIVAL_BUFFER_MAX_MINUTES ? null : `Enter whole minutes, 0 to ${ARRIVAL_BUFFER_MAX_MINUTES}`;
+  const saveArrival = async (event: FormEvent) => {
+    event.preventDefault();
+    setSaving("arrival");
+    await apply({ arrivalBufferMinutes: arrivalValue }, "Arrival time saved");
     setSaving(null);
   };
 
@@ -284,9 +300,38 @@ export function SettingsPage() {
             <Setting label="I usually get to work by">
               <SegmentedControl label="How you get to work" options={COMMUTE_MODES} value={user.commuteMode} onChange={(commuteMode) => apply({ commuteMode })} className="w-full sm:w-48" />
             </Setting>
-            <Setting label="I like to arrive" help="Leave-by times and routes are planned to get you there this early.">
-              <SegmentedControl label="How early you like to arrive" options={ARRIVAL_BUFFER_OPTIONS} value={String(user.arrivalBufferMinutes) as "0"} onChange={(value) => apply({ arrivalBufferMinutes: Number(value) })} className="w-full sm:w-80" />
+            <Setting
+              label="I like to arrive"
+              help={`Leave-by times and routes are planned to get you there this early.${user.arrivalBufferMinutes > 0 ? ` ${describeArriveByExample(user.arrivalBufferMinutes)}` : ""}`}
+            >
+              <SegmentedControl
+                label="How early you like to arrive"
+                options={ARRIVAL_BUFFER_OPTIONS}
+                value={isCustomArrival ? "custom" : arrivalBufferChoice(user.arrivalBufferMinutes)}
+                onChange={chooseArrival}
+                className="w-full sm:w-96"
+              />
             </Setting>
+            {isCustomArrival && (
+              <form onSubmit={saveArrival}>
+                <Setting label="Minutes early" htmlFor="settings-arrival" help={arrival !== "" && arrivalError ? <span className="text-destructive">{arrivalError}</span> : "Any number, like 7 or 25."}>
+                  <input
+                    id="settings-arrival"
+                    inputMode="numeric"
+                    maxLength={3}
+                    placeholder="7"
+                    autoFocus={arrival === ""}
+                    aria-invalid={arrival !== "" && arrivalError ? true : undefined}
+                    value={arrival}
+                    onChange={(event) => setArrival(event.target.value.replace(/[^0-9]/g, ""))}
+                    className={`${inputClass} text-right tabular-nums sm:w-24`}
+                  />
+                  <Button type="submit" variant="secondary" busy={saving === "arrival"} disabled={!!arrivalError || arrivalValue === user.arrivalBufferMinutes}>
+                    Save
+                  </Button>
+                </Setting>
+              </form>
+            )}
           </Section>
 
           <Section id="pay" title="Pay estimates" open={open}>

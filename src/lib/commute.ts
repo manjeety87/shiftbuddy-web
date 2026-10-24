@@ -6,13 +6,30 @@ import type { TransitItinerary } from './transit';
 // routes) so the app and the web app show the same answers; this file only
 // fetches them.
 
-/** How early people can choose to arrive — must match the backend's ARRIVAL_BUFFER_OPTIONS. */
+/** The backend takes any whole number of minutes up to this (ARRIVAL_BUFFER_MAX_MINUTES there). */
+export const ARRIVAL_BUFFER_MAX_MINUTES = 120;
+
+/** How early people can choose to arrive: quick picks, or Custom for any other minute. */
 export const ARRIVAL_BUFFER_OPTIONS = [
     { value: '0', label: 'On time' },
     { value: '5', label: '5 min' },
     { value: '10', label: '10 min' },
     { value: '15', label: '15 min' },
+    { value: 'custom', label: 'Custom' },
 ] as const;
+
+export type ArrivalBufferChoice = (typeof ARRIVAL_BUFFER_OPTIONS)[number]['value'];
+
+/** The option a saved buffer shows as: its quick pick, or Custom (e.g. 7 min) */
+export const arrivalBufferChoice = (minutes: number): ArrivalBufferChoice =>
+    ARRIVAL_BUFFER_OPTIONS.find((option) => option.value === String(minutes))?.value ?? 'custom';
+
+/** "For a 10:00 AM shift you’ll be there by 9:53 AM." — makes a minute count concrete */
+export const describeArriveByExample = (minutes: number) => {
+    const arriveAt = 10 * 60 - minutes; // the buffer is at most 2 h, so this stays in the morning
+    const time = `${Math.floor(arriveAt / 60)}:${String(arriveAt % 60).padStart(2, '0')} AM`;
+    return `For a 10:00 AM shift you’ll be there by ${time}.`;
+};
 
 /** "arrive 10 min early" / "arrive right on time" */
 export const describeArrivalBuffer = (minutes: number) => (minutes === 0 ? 'arrive right on time' : `arrive ${minutes} min early`);
