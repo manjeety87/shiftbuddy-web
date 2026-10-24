@@ -2,7 +2,7 @@
 
 import { CalendarClock, CheckSquare, ChevronRight, Copy, DollarSign, Plus, ScanLine, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { formatShiftTimes, isHappeningNow, NowBadge, shiftMinutes } from "@/components/ShiftRow";
+import { countedMinutes, formatShiftTimes, isHappeningNow, MissedBadge, NowBadge, shiftMinutes } from "@/components/ShiftRow";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { selectClass } from "@/components/ui/Field";
@@ -16,7 +16,8 @@ import { addDays, formatDayLabel } from "@/lib/inputs";
 import { jobName, jobRole } from "@/lib/jobLabels";
 import { deleteShiftsWithUndo } from "@/lib/shiftActions";
 import { useShiftsChanged } from "@/lib/shiftEvents";
-import { getMyShifts } from "@/lib/shifts";
+import { describeMissedCounts } from "@/lib/missedShifts";
+import { getMyShifts, getShiftsSummary } from "@/lib/shifts";
 import { formatDuration } from "@/lib/shiftTime";
 import { openSheet } from "@/lib/sheets";
 import { useTimesheetChanged } from "@/lib/timesheet";
@@ -30,7 +31,9 @@ const PAST_DAYS = 90;
 const VIEWS = [
   { value: "upcoming", label: "Upcoming" },
   { value: "past", label: "Past" },
+  { value: "missed", label: "Missed" },
 ] as const;
+type View = (typeof VIEWS)[number]["value"];
 
 // One set of columns for the header and every row, so the table lines up. On a
 // phone the day and time fold into the job cell and only the length stays beside it.
@@ -59,23 +62,36 @@ const workedText = (shift: Shift) => {
 
 export function ShiftsPage() {
   const now = useNow();
-  const [view, setView] = useState<"upcoming" | "past">("upcoming");
+  const [view, setView] = useState<View>("upcoming");
   const [jobId, setJobId] = useState("all");
   // Several shifts at once, to clear a week copied by mistake, say
   const [selecting, setSelecting] = useState(false);
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
 
-  // Upcoming is asked for from a day back, so a shift in progress is included; past is the last 90 days
+  // Upcoming is asked for from a day back, so a shift in progress is included; past is the last 90 days;
+  // missed is this calendar year, ahead too (a shift already called off)
+  const yearStart = new Date(new Date().getFullYear(), 0, 1).toISOString();
   const { data, error, retry, refetch } = useFetch(
-    () => (view === "upcoming" ? getMyShifts({ from: new Date(Date.now() - DAY_MS).toISOString() }) : getMyShifts({ from: new Date(Date.now() - PAST_DAYS * DAY_MS).toISOString(), to: new Date().toISOString() })),
+    () =>
+      view === "missed"
+        ? getMyShifts({ from: yearStart })
+        : view === "upcoming"
+          ? getMyShifts({ from: new Date(Date.now() - DAY_MS).toISOString() })
+          : getMyShifts({ from: new Date(Date.now() - PAST_DAYS * DAY_MS).toISOString(), to: new Date().toISOString() }),
     [view],
   );
-  useShiftsChanged(refetch);
+  // The counts come from the backend's summary, the same numbers the phone app shows
+  const missedSummary = useFetch(() => (view === "missed" ? getShiftsSummary({ from: yearStart }) : Promise.resolve(null)), [view]);
+  useShiftsChanged(() => {
+    refetch();
+    missedSummary.refetch();
+  });
   useTimesheetChanged(refetch);
 
-  const inView = data?.filter((shift) => (view === "upcoming" ? Date.parse(shift.endTime) > now : Date.parse(shift.endTime) <= now)) ?? [];
-  if (view === "past") inView.reverse(); // newest first
+  const inView =
+    data?.filter((shift) => (view === "missed" ? !!shift.missedReason : view === "upcoming" ? Date.parse(shift.endTime) > now : Date.parse(shift.endTime) <= now)) ?? [];
+  if (view !== "upcoming") inView.reverse(); // newest first
 
   const jobs = [...new Map(inView.map((shift) => [shift.jobId, shift.job])).values()];
   // A job that has left the list (its last shift was deleted) can't stay selected
@@ -118,7 +134,7 @@ export function ShiftsPage() {
     else groups.push({ key: weekStart.getTime(), weekStart, shifts: [shift] });
   });
 
-  const totalMinutes = shown.reduce((total, shift) => total + shiftMinutes(shift), 0);
+  const totalMinutes = countedMinutes(shown);
 
   const showsEmptyState = !error && data !== null && groups.length === 0 && view === "upcoming";
   const allPicked = shown.length > 0 && pickedShifts.length === shown.length;
@@ -191,7 +207,9 @@ export function ShiftsPage() {
         {shown.length > 0 && (
           <div className="ml-auto flex items-center gap-3">
             <p className="text-sm text-muted-foreground tabular-nums">
-              {shown.length} shift{shown.length === 1 ? "" : "s"} · {formatDuration(totalMinutes)}
+              {view === "missed"
+                ? missedSummary.data && describeMissedCounts(missedSummary.data.missed, "this year")
+                : `${shown.length} shift${shown.length === 1 ? "" : "s"} · ${formatDuration(totalMinutes)}`}
             </p>
           </div>
         )}
@@ -219,6 +237,10 @@ export function ShiftsPage() {
           >
             Add a shift yourself, or scan a photo of your schedule.
           </EmptyState>
+        ) : view === "missed" ? (
+          <EmptyState icon={CalendarClock} title="No missed shifts this year">
+            Sick, or called off? Choose “Can’t make it?” on Home, or open the shift.
+          </EmptyState>
         ) : (
           <EmptyState icon={CalendarClock} title="No past shifts">
             Shifts from the last {PAST_DAYS} days show here once they’re over.
@@ -231,7 +253,7 @@ export function ShiftsPage() {
             <span>Job</span>
             <span>Time</span>
             <span className="text-right">Length</span>
-            <span>{view === "past" ? "Hours worked" : "Notes"}</span>
+            <span>{view === "past" ? "Hours worked" : view === "missed" ? "Note" : "Notes"}</span>
             <span />
           </div>
 
@@ -239,7 +261,7 @@ export function ShiftsPage() {
             <section key={group.key} aria-label={weekLabel(group.weekStart, now)}>
               <h2 className="flex h-8 items-center gap-3 border-b border-border bg-muted/35 px-4 text-xs font-semibold">
                 <span className="flex-1">{weekLabel(group.weekStart, now)}</span>
-                <span className="font-medium text-muted-foreground tabular-nums">{formatDuration(group.shifts.reduce((total, shift) => total + shiftMinutes(shift), 0))}</span>
+                {view !== "missed" && <span className="font-medium text-muted-foreground tabular-nums">{formatDuration(countedMinutes(group.shifts))}</span>}
                 {selecting && <WeekToggle shifts={group.shifts} picked={picked} onToggle={toggle} />}
               </h2>
               <ul className="divide-y divide-border">
@@ -248,7 +270,8 @@ export function ShiftsPage() {
                   const startsDay = index === 0 || toCalendarDateString(group.shifts[index - 1].startTime) !== toCalendarDateString(shift.startTime);
                   const role = jobRole(shift.job);
                   const worked = view === "past" ? workedText(shift) : null;
-                  const aside = worked?.text ?? (view === "upcoming" ? shift.notes : null);
+                  const missed = shift.missedReason;
+                  const aside = missed ? shift.missedNote : (worked?.text ?? (view === "upcoming" ? shift.notes : null));
                   const isPicked = picked.has(shift.id);
                   return (
                     <li key={shift.id}>
@@ -271,19 +294,19 @@ export function ShiftsPage() {
                           <span aria-hidden className="h-8 w-1 shrink-0 rounded-full md:size-2" style={{ backgroundColor: shift.job.color }} />
                           <span className="min-w-0">
                             <span className="flex items-center gap-2">
-                              <span className="truncate text-base font-medium md:text-sm">{jobName(shift.job)}</span>
-                              {isHappeningNow(shift, now) && <NowBadge />}
+                              <span className={`truncate text-base font-medium md:text-sm ${missed ? "opacity-65" : ""}`}>{jobName(shift.job)}</span>
+                              {missed ? <MissedBadge reason={missed} /> : isHappeningNow(shift, now) && <NowBadge />}
                             </span>
                             {role && <span className="hidden truncate text-xs text-muted-foreground md:block">{role}</span>}
-                            <span className="block truncate text-sm text-muted-foreground tabular-nums md:hidden">
+                            <span className={`block truncate text-sm text-muted-foreground tabular-nums md:hidden ${missed ? "line-through" : ""}`}>
                               {day} · {formatShiftTimes(shift)}
                             </span>
                             {aside && <span className={`block truncate text-xs md:hidden ${worked?.isOpen ? "font-medium text-warning-ink" : "text-muted-foreground"}`}>{aside}</span>}
                           </span>
                         </span>
 
-                        <span className="hidden text-sm tabular-nums md:block">{formatShiftTimes(shift)}</span>
-                        <span className="text-right text-sm text-muted-foreground tabular-nums">{formatDuration(shiftMinutes(shift))}</span>
+                        <span className={`hidden text-sm tabular-nums md:block ${missed ? "line-through opacity-65" : ""}`}>{formatShiftTimes(shift)}</span>
+                        <span className={`text-right text-sm text-muted-foreground tabular-nums ${missed ? "line-through opacity-65" : ""}`}>{formatDuration(shiftMinutes(shift))}</span>
                         <span className={`hidden truncate text-sm md:block ${worked?.isOpen ? "font-medium text-warning-ink" : "text-muted-foreground"}`}>{aside ?? "—"}</span>
                         {selecting ? <Checkbox checked={isPicked} /> : <ChevronRight aria-hidden className="size-4 text-faint" />}
                       </button>

@@ -1,10 +1,16 @@
 import type { Job } from './job';
 
+/** Why a shift was missed — must match the backend's MISSED_REASONS */
+export type MissedReason = 'SICK' | 'EMERGENCY' | 'TRANSIT' | 'CALLED_OFF' | 'OTHER';
+
 export interface Shift {
     id: string;
     startTime: string; // ISO string — backend hamesha isi format me bhejta hai
     endTime: string;
     notes: string | null;
+    /** Set when the user couldn't go or it was called off: still listed, but it counts for nothing */
+    missedReason: MissedReason | null;
+    missedNote: string | null;
     jobId: string;
     /** Hours clocked for this shift — only on lists from GET /shifts; usually none or one */
     timeEntries?: { id: string; clockIn: string; clockOut: string | null; breakMinutes: number }[];

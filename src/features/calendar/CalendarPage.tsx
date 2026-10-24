@@ -163,8 +163,8 @@ export function CalendarPage() {
                       {shifts.slice(0, CELL_SHIFTS).map((shift) => (
                         <span key={shift.id} className="flex min-w-0 items-center gap-1 rounded-[5px] px-1 py-px text-2xs" style={{ backgroundColor: `color-mix(in oklab, ${shift.job.color} 16%, transparent)` }}>
                           <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: shift.job.color }} />
-                          <span className="shrink-0 font-medium">{shortTime(shift.startTime)}</span>
-                          <span className="truncate text-muted-foreground">{jobName(shift.job)}</span>
+                          <span className={`shrink-0 font-medium ${shift.missedReason ? "line-through opacity-65" : ""}`}>{shortTime(shift.startTime)}</span>
+                          <span className={`truncate text-muted-foreground ${shift.missedReason ? "opacity-65" : ""}`}>{jobName(shift.job)}</span>
                         </span>
                       ))}
                       {shifts.length > CELL_SHIFTS && <span className="px-1 text-2xs text-muted-foreground">+{shifts.length - CELL_SHIFTS} more</span>}

@@ -101,6 +101,48 @@ try {
     await shot("f3-past-shifts");
   });
 
+  await step("home: “Can’t make it?” on the next-shift card opens the missed-shift panel", async () => {
+    await page.goto(`${BASE}/home`);
+    await ui.getByRole("button", { name: /make it\?/ }).click();
+    await sheet().getByText("What happened?").waitFor();
+    await sheet().getByRole("button", { name: "Cancel" }).click();
+    await closed();
+  });
+
+  await step("missed: a called-off shift leaves the clashes, is counted under Missed, and comes back", async () => {
+    await page.goto(`${BASE}/shifts`);
+    await ui.getByRole("radio", { name: "Upcoming" }).check({ force: true });
+    await ui.getByRole("button", { name: /Boathouse/ }).last().click(); // `first`, the one Fairweather overlaps
+    await sheet().getByRole("button", { name: /Mark as Missed/ }).click();
+    await sheet().getByRole("radio", { name: "My manager called it off" }).click();
+    await sheet().getByRole("button", { name: "Save" }).click();
+    await ui.getByText("Marked as missed").waitFor();
+    await page.waitForFunction(() => document.querySelectorAll("dialog[open]").length === 1);
+    await sheet().getByRole("button", { name: /Called off/ }).waitFor(); // the shift's own row refreshed under the closed panel
+    await sheet().getByRole("button", { name: "Cancel" }).click();
+    await closed();
+
+    await ui.getByRole("radio", { name: "Missed" }).check({ force: true });
+    await ui.getByText("1 this year — 1 called off").waitFor();
+    await shot("f3b-missed");
+
+    await page.goto(`${BASE}/home`);
+    await ui.getByText(/^This week ·/).waitFor();
+    await page.waitForTimeout(1200);
+    if (await ui.getByText("Boathouse and Fairweather overlap").count()) throw new Error("a missed shift still shows as an overlap");
+
+    await page.goto(`${BASE}/shifts`);
+    await ui.getByRole("radio", { name: "Missed" }).check({ force: true });
+    await ui.getByRole("button", { name: /Boathouse/ }).click();
+    await sheet().getByRole("button", { name: /Called off/ }).click();
+    await sheet().getByRole("button", { name: "It’s Back On" }).click();
+    await page.waitForFunction(() => document.querySelectorAll("dialog[open]").length === 1);
+    await sheet().getByRole("button", { name: /Mark as Missed/ }).waitFor();
+    await sheet().getByRole("button", { name: "Cancel" }).click();
+    await closed();
+    await ui.getByText("No missed shifts this year").waitFor();
+  });
+
   await step("copy a shift onto another day", async () => {
     await ui.getByRole("radio", { name: "Upcoming" }).check({ force: true });
     await ui.getByRole("button", { name: /Fairweather/ }).click();

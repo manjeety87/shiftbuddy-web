@@ -100,6 +100,7 @@ export function PaySummarySheet({ onClose }: { onClose: () => void }) {
             <p className="text-3xl font-bold tabular-nums">{formatHours(data.totalHours)}</p>
             <p className="mb-2 text-xs text-muted-foreground">
               {data.shiftCount} shift{data.shiftCount === 1 ? "" : "s"}
+              {data.missed.total > 0 && ` · ${data.missed.total} missed, not counted`}
             </p>
             {data.totalHours > 0 && (
               <>

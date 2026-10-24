@@ -1,3 +1,5 @@
+import type { MissedReason } from './shift.d';
+
 export interface JobSummary {
     jobId: string;
     jobTitle: string;
@@ -20,4 +22,6 @@ export interface PaySummary {
     totalNetPay: number;
     taxDeductionPercent: number;
     byJob: JobSummary[];
+    /** Shifts marked missed in the period — not in any number above */
+    missed: { total: number; byReason: Partial<Record<MissedReason, number>> };
 }

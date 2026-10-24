@@ -12,6 +12,7 @@ import { DeleteAccountSheet } from "@/features/settings/DeleteAccountSheet";
 import { SharedSheet } from "@/features/sharing/SharedSheet";
 import { CopySheet } from "@/features/shifts/CopySheet";
 import { CopyWeekSheet } from "@/features/shifts/CopyWeekSheet";
+import { MissedShiftSheet } from "@/features/shifts/MissedShiftSheet";
 import { PaySummarySheet } from "@/features/shifts/PaySummarySheet";
 import { ShiftSheet } from "@/features/shifts/ShiftSheet";
 import { TimeEntrySheet } from "@/features/timesheet/TimeEntrySheet";
@@ -22,6 +23,8 @@ const render = (request: SheetRequest, onClose: () => void) => {
   switch (request.kind) {
     case "shift":
       return <ShiftSheet shiftId={request.shiftId} date={request.date} onClose={onClose} />;
+    case "missed":
+      return <MissedShiftSheet shiftId={request.shiftId} onClose={onClose} />;
     case "job":
       return <JobSheet jobId={request.jobId} onClose={onClose} />;
     case "timeEntry":

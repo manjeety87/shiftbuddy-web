@@ -332,6 +332,13 @@ function UpcomingShiftCard({ shift, now, isClockedIn }: { shift: Shift; now: num
             {!isClockedIn && <p className="text-xs tabular-nums">Clock in opens at {formatTime(new Date(opensAt).toISOString())}</p>}
           </div>
         )}
+
+        {/* Sick, called off…: marked here so the card moves on to the next shift */}
+        {!isClockedIn && (
+          <button type="button" onClick={() => openSheet({ kind: "missed", shiftId: shift.id })} className="self-center rounded-md px-2 py-1 text-sm font-semibold underline underline-offset-2 opacity-90 pointer-fine:hover:opacity-100">
+            {hasStarted ? "Didn’t make it?" : "Can’t make it?"}
+          </button>
+        )}
       </div>
     </section>
   );
@@ -419,7 +426,8 @@ export function HomePage() {
   });
   useTimesheetChanged(current.refetch);
 
-  const next = upcoming.data?.find((shift) => Date.parse(shift.endTime) > now) ?? null;
+  // Missed shifts never make the card: the user isn't going
+  const next = upcoming.data?.find((shift) => !shift.missedReason && Date.parse(shift.endTime) > now) ?? null;
   const hasNothingUpcoming = upcoming.data !== null && !next;
 
   // Each step is read from the data, so a tick means it's really done
@@ -447,7 +455,7 @@ export function HomePage() {
       ? []
       : (week.data ?? [])
           .filter((shift) => Date.parse(shift.startTime) >= rangeStart.getTime())
-          .map((shift) => ({ key: shift.id, personId: ME, startTime: shift.startTime, endTime: shift.endTime, name: jobName(shift.job), colour: shift.job.color, open: () => openSheet({ kind: "shift", shiftId: shift.id }) }))),
+          .map((shift) => ({ key: shift.id, personId: ME, startTime: shift.startTime, endTime: shift.endTime, name: jobName(shift.job), colour: shift.job.color, missed: !!shift.missedReason, open: () => openSheet({ kind: "shift", shiftId: shift.id }) }))),
     ...(shared.data ?? [])
       .filter((list) => !hidden.has(list.owner.id))
       .flatMap((list) => {
@@ -492,7 +500,7 @@ export function HomePage() {
   // Only when someone shares with you: alone, the next-shift card already says all of this
   const todayPeople: PersonToday[] = nearby.data?.length
     ? [
-        { id: ME, name: "You", colour: "var(--primary)", today: (upcoming.data ?? []).filter(isToday), next },
+        { id: ME, name: "You", colour: "var(--primary)", today: (upcoming.data ?? []).filter((shift) => !shift.missedReason && isToday(shift)), next },
         ...nearby.data.map((list, index) => {
           const name = list.owner.name.split(" ")[0];
           return {
@@ -509,7 +517,7 @@ export function HomePage() {
   // After today, everyone together — only worth a list when someone else's shifts are in it
   const comingUp: ComingUp[] = todayPeople.length
     ? [
-        ...(hidden.has(ME) ? [] : (upcoming.data ?? []).map((shift) => ({ key: shift.id, startTime: shift.startTime, endTime: shift.endTime, name: jobName(shift.job), colour: shift.job.color, open: () => openSheet({ kind: "shift", shiftId: shift.id }) }))),
+        ...(hidden.has(ME) ? [] : (upcoming.data ?? []).filter((shift) => !shift.missedReason).map((shift) => ({ key: shift.id, startTime: shift.startTime, endTime: shift.endTime, name: jobName(shift.job), colour: shift.job.color, open: () => openSheet({ kind: "shift", shiftId: shift.id }) }))),
         ...(nearby.data ?? [])
           .filter((list) => !hidden.has(list.owner.id))
           .flatMap((list) => {

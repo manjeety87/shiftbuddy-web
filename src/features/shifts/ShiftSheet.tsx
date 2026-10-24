@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, ClipboardList, CloudSun, Copy, Navigation, Plus, Trash2 } from "lucide-react";
+import { CalendarX, ChevronRight, ClipboardList, CloudSun, Copy, Navigation, Plus, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { TimeFields } from "@/components/TimeFields";
 import { Button } from "@/components/ui/Button";
@@ -11,11 +11,13 @@ import type { Shift } from "@/interfaces/shift.d";
 import { errorMessage } from "@/lib/api";
 import { confirmOverlap, getOverlapConflicts } from "@/lib/conflicts";
 import { formatTime } from "@/lib/dateUtils";
+import { missedTag } from "@/lib/missedShifts";
 import { deleteShiftsWithUndo } from "@/lib/shiftActions";
 import { confirmShortShift } from "@/lib/shiftDialogs";
 import { createShift, getShiftById, updateShift } from "@/lib/shifts";
 import { defaultShiftTimes, formatDuration, MIN_SHIFT_MINUTES, resolveShiftRange, toShiftTimes, withDuration, type ShiftTimes } from "@/lib/shiftTime";
 import { openSheet } from "@/lib/sheets";
+import { useShiftsChanged } from "@/lib/shiftEvents";
 import { useTimesheetChanged } from "@/lib/timesheet";
 import { useMyJobs } from "@/lib/useMyJobs";
 import { JobSelect } from "../jobs/JobSelect";
@@ -62,6 +64,21 @@ function HoursRow({ shift }: { shift: Shift }) {
   );
 }
 
+/** Couldn't go: opens the missed-shift sheet, or says why it was missed. */
+function MissedRow({ shift }: { shift: Shift }) {
+  const reason = shift.missedReason;
+  return (
+    <button type="button" onClick={() => openSheet({ kind: "missed", shiftId: shift.id })} className="surface flex min-h-11 w-full items-center gap-3 px-3.5 py-2 text-left row-hover">
+      <CalendarX aria-hidden className="size-4 text-muted-foreground" />
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-medium">{reason ? missedTag(reason) : "Mark as Missed"}</span>
+        <span className="block truncate text-xs text-muted-foreground">{reason ? (shift.missedNote ?? "Not counted toward pay") : "Sick, called off by your manager…"}</span>
+      </span>
+      <ChevronRight aria-hidden className="size-4 text-faint" />
+    </button>
+  );
+}
+
 /** Add a shift (optionally on `date`), or change / delete one. */
 export function ShiftSheet({ shiftId, date, onClose }: { shiftId?: string; date?: Date; onClose: () => void }) {
   const sheet = useRef<SheetHandle>(null);
@@ -92,10 +109,13 @@ export function ShiftSheet({ shiftId, date, onClose }: { shiftId?: string; date?
       .catch((failure) => setLoadError(errorMessage(failure, "Couldn’t open this shift.")));
   }, [shiftId, attempt]);
 
-  // Hours were added or changed in the sheet above this one: refresh the row, leave the form alone
-  useTimesheetChanged(() => {
+  // Hours were added or changed — or the shift marked missed — in the sheet above this one:
+  // refresh the rows, leave the form alone
+  const reloadSaved = () => {
     if (shiftId) getShiftById(shiftId).then(setSaved).catch(() => undefined);
-  });
+  };
+  useTimesheetChanged(reloadSaved);
+  useShiftsChanged(reloadSaved);
 
   // With one job there is nothing to choose
   const jobId = selectedJobId ?? (jobs?.length === 1 ? jobs[0].id : null);
@@ -191,7 +211,15 @@ export function ShiftSheet({ shiftId, date, onClose }: { shiftId?: string; date?
           <TimeFields value={times} onChange={setTimes} />
           <TextArea label="Notes" placeholder="Optional — e.g. closing shift" maxLength={MAX_NOTES} value={notes} onChange={(event) => setNotes(event.target.value)} />
 
-          {saved && hasStarted && (
+          {/* Worked and missed can't both be true (the backend refuses it), so a shift with hours offers no "missed" */}
+          {saved && !saved.timeEntries?.length && (
+            <div className="mb-4">
+              <SectionLabel>Couldn’t go?</SectionLabel>
+              <MissedRow shift={saved} />
+            </div>
+          )}
+
+          {saved && hasStarted && !saved.missedReason && (
             <div className="mb-4">
               <SectionLabel>Hours worked</SectionLabel>
               <HoursRow shift={saved} />

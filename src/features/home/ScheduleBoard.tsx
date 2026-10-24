@@ -15,6 +15,8 @@ export interface BoardEntry {
   name: string;
   /** The job's colour */
   colour: string;
+  /** Marked missed (sick, called off…): shown faded and struck through */
+  missed?: boolean;
   open: () => void;
 }
 
@@ -78,14 +80,14 @@ function WeekChip({ entry, now }: { entry: BoardEntry; now: number }) {
     <button
       type="button"
       onClick={entry.open}
-      className={`w-full rounded-lg py-1.5 pr-2 pl-2.5 text-left transition-[scale,filter] duration-150 ease-out active:scale-[0.97] pointer-fine:hover:brightness-95 ${Date.parse(entry.endTime) <= now ? "opacity-55" : ""}`}
+      className={`w-full rounded-lg py-1.5 pr-2 pl-2.5 text-left transition-[scale,filter] duration-150 ease-out active:scale-[0.97] pointer-fine:hover:brightness-95 ${entry.missed || Date.parse(entry.endTime) <= now ? "opacity-55" : ""}`}
       style={chipStyle(entry.colour)}
     >
       <span className="line-clamp-2 text-sm leading-snug font-semibold wrap-break-word">{entry.name}</span>
-      <span className="block text-xs text-foreground/75 tabular-nums">
+      <span className={`block text-xs text-foreground/75 tabular-nums ${entry.missed ? "line-through" : ""}`}>
         {shortTime(entry.startTime)} – {shortTime(entry.endTime)}
       </span>
-      {isNow && <span className="mt-0.5 block text-2xs font-bold text-primary">Now</span>}
+      {entry.missed ? <span className="mt-0.5 block text-2xs font-bold text-muted-foreground">Missed</span> : isNow && <span className="mt-0.5 block text-2xs font-bold text-primary">Now</span>}
     </button>
   );
 }
@@ -224,7 +226,7 @@ export function MonthBoard({ monthStart, people, entries, now, onAdd, onOpenDay 
               </h3>
               {dayEntries.slice(0, CELL_ENTRIES).map((entry) => {
                 const owner = others.get(entry.personId);
-                const described = `${owner ? `${owner.name} · ` : ""}${entry.name}, ${shortTime(entry.startTime)} – ${shortTime(entry.endTime)}`;
+                const described = `${owner ? `${owner.name} · ` : ""}${entry.name}, ${shortTime(entry.startTime)} – ${shortTime(entry.endTime)}${entry.missed ? " (missed)" : ""}`;
                 return (
                   <button
                     key={entry.key}
@@ -232,11 +234,11 @@ export function MonthBoard({ monthStart, people, entries, now, onAdd, onOpenDay 
                     onClick={entry.open}
                     title={described}
                     aria-label={described}
-                    className={`flex h-6 w-full min-w-0 items-center gap-1.5 rounded-md pr-1.5 pl-2 text-left text-xs transition-[scale,filter] duration-150 ease-out active:scale-[0.97] pointer-fine:hover:brightness-95 ${Date.parse(entry.endTime) <= now ? "opacity-55" : ""}`}
+                    className={`flex h-6 w-full min-w-0 items-center gap-1.5 rounded-md pr-1.5 pl-2 text-left text-xs transition-[scale,filter] duration-150 ease-out active:scale-[0.97] pointer-fine:hover:brightness-95 ${entry.missed || Date.parse(entry.endTime) <= now ? "opacity-55" : ""}`}
                     style={chipStyle(entry.colour)}
                   >
                     {owner && <Avatar person={owner} className="size-4 text-[0.5625rem]" />}
-                    <span className="shrink-0 font-semibold tabular-nums">{shortTime(entry.startTime)}</span>
+                    <span className={`shrink-0 font-semibold tabular-nums ${entry.missed ? "line-through" : ""}`}>{shortTime(entry.startTime)}</span>
                     <span className="truncate">{entry.name}</span>
                   </button>
                 );

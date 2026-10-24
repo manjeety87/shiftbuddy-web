@@ -10,6 +10,7 @@ import type { StartChoice } from "./commute";
 
 export type SheetRequest =
   | { kind: "shift"; shiftId?: string; date?: Date }
+  | { kind: "missed"; shiftId: string }
   | { kind: "job"; jobId?: string }
   | { kind: "timeEntry"; entryId?: string; shiftId?: string; jobId?: string }
   | { kind: "copy"; shiftIds: string[] }
