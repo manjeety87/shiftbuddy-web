@@ -92,6 +92,13 @@ export interface HoursSummary {
 export const getHoursSummary = async (range: SummaryRange, offset: number): Promise<HoursSummary> =>
     (await api.get<{ data: HoursSummary }>('/timesheet/summary', { params: { range, offset, timeZone: deviceTimeZone() } })).data.data;
 
+/** What a statement covers: every job for a week, two weeks or a month — or one job's pay period. */
+export type StatementOf = { range: Exclude<SummaryRange, 'all'>; offset: number } | { jobId: string; offset: number };
+
+/** The hours worked (and the pay, while pay estimates are on) as a PDF to keep or send (`GET /timesheet/statement`). */
+export const getStatementPdf = async (of: StatementOf): Promise<Blob> =>
+    (await api.get<Blob>('/timesheet/statement', { params: { ...of, timeZone: deviceTimeZone() }, responseType: 'blob' })).data;
+
 export const clockOut = async (): Promise<TimeEntry> => {
     const { data } = await api.post<{ data: TimeEntry }>('/timesheet/clock-out');
     timesheetChanged.emit();

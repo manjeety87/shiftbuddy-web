@@ -4,6 +4,7 @@
 // Sets its data up through the API, then drives a real browser. Routes, weather and
 // address search call outside providers, so those checks accept "not available
 // right now" as long as the screen says so plainly. One @test.local account, deleted after.
+import { readFileSync } from "node:fs";
 import { chromium } from "playwright";
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3210";
@@ -244,6 +245,13 @@ try {
     await ui.getByText("Paid hours").waitFor();
     await page.waitForTimeout(800);
     await shot("f8-timesheet");
+  });
+
+  await step("timesheet: PDF downloads the week as a statement", async () => {
+    const [download] = await Promise.all([page.waitForEvent("download"), ui.getByRole("button", { name: "Download PDF" }).click()]);
+    if (!/^shiftbuddy-hours-\d{4}-\d{2}-\d{2}-to-\d{4}-\d{2}-\d{2}\.pdf$/.test(download.suggestedFilename())) throw new Error(`file name: ${download.suggestedFilename()}`);
+    const file = readFileSync(await download.path());
+    if (file.subarray(0, 5).toString() !== "%PDF-" || file.length < 1500) throw new Error(`not a PDF (${file.length} bytes)`);
   });
 
   // A share only becomes active once the receiver's email is verified, which a test

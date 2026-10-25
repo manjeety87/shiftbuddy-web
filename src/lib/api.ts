@@ -19,6 +19,8 @@ interface RequestOptions {
   timeout?: number;
   /** Accepted for parity with the mobile client; fetch sets multipart headers itself */
   headers?: Record<string, string>;
+  /** "blob" for a file (a PDF); errors still come back as JSON */
+  responseType?: "json" | "blob";
 }
 
 export class HttpError extends Error {
@@ -58,6 +60,7 @@ const send = async (method: string, url: string, body: unknown, options: Request
   } catch {
     throw new HttpError("Network request failed");
   }
+  if (response.ok && options.responseType === "blob") return { data: await response.blob() };
   const data = await response.json().catch(() => null);
   if (!response.ok) {
     const error = new HttpError(data?.message ?? `Request failed (${response.status})`);

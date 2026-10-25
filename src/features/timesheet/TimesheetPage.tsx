@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, ClipboardList, Plus } from "lucide-react";
+import { ChevronRight, ClipboardList, FileDown, Plus } from "lucide-react";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { PeriodNav } from "@/components/PeriodNav";
@@ -11,11 +11,14 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { LoadError, SkeletonRows } from "@/components/ui/States";
 import { formatTime } from "@/lib/dateUtils";
+import { errorMessage } from "@/lib/api";
 import { formatMoney } from "@/lib/inputs";
 import { jobName } from "@/lib/jobLabels";
+import { notify } from "@/lib/notify";
+import { saveFile } from "@/lib/saveFile";
 import { formatDuration } from "@/lib/shiftTime";
 import { openSheet } from "@/lib/sheets";
-import { formatCalendarDay, getHoursSummary, getTimesheet, useTimesheetChanged, type HoursSummary, type SummaryRange, type TimesheetEntry, type WeekTimesheet } from "@/lib/timesheet";
+import { formatCalendarDay, getHoursSummary, getStatementPdf, getTimesheet, useTimesheetChanged, type HoursSummary, type SummaryRange, type TimesheetEntry, type WeekTimesheet } from "@/lib/timesheet";
 import { useFetch } from "@/lib/useFetch";
 import { useMyJobs } from "@/lib/useMyJobs";
 import { jobOptionLabel } from "../jobs/JobSelect";
@@ -75,8 +78,8 @@ export function TimesheetPage() {
   const showPay = featuresOf(useUser()).pay;
   const isAllTime = jobId === ALL_JOBS && range === "all";
 
+  const period = summary?.period ?? data?.job?.period;
   const periodLabel = (() => {
-    const period = summary?.period ?? data?.job?.period;
     if (!period?.start) return " ";
     if (isAllTime) return `Since ${formatCalendarDay(period.start, { month: "short", day: "numeric", year: "numeric" })}`;
     if (jobId === ALL_JOBS && range === "month") return formatCalendarDay(period.start, { month: "long", year: "numeric" });
@@ -87,6 +90,22 @@ export function TimesheetPage() {
   const hasJobSplit = !isAllTime && (summary?.byJob.length ?? 0) > 0;
   const addHours = () => openSheet({ kind: "timeEntry", jobId: jobId === ALL_JOBS ? undefined : jobId });
 
+  // The period on screen as a PDF statement, to keep or send. All time is a history, not a statement.
+  const [downloading, setDownloading] = useState(false);
+  const canDownload = !isAllTime && !!period?.start && (totals?.entryCount ?? 0) > 0;
+  const downloadPdf = async () => {
+    if (!period?.start) return;
+    setDownloading(true);
+    try {
+      const pdf = await getStatementPdf(jobId === ALL_JOBS ? { range: range as Exclude<SummaryRange, "all">, offset } : { jobId, offset });
+      saveFile(pdf, `shiftbuddy-hours-${period.start}-to-${period.end ?? period.start}.pdf`);
+    } catch (failure) {
+      notify.error("Couldn’t make the PDF", { description: errorMessage(failure) });
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   return (
     <>
       <PageHeader
@@ -96,9 +115,16 @@ export function TimesheetPage() {
         back={{ label: "Settings", href: "/settings" }}
         actions={
           hasNoJobs ? undefined : (
-            <Button aria-label="Add hours" icon={<Plus aria-hidden className="size-4" />} onClick={addHours}>
-              <span className="hidden sm:inline">Add Hours</span>
-            </Button>
+            <>
+              {canDownload && (
+                <Button variant="secondary" aria-label="Download PDF" icon={<FileDown aria-hidden className="size-4" />} busy={downloading} onClick={downloadPdf}>
+                  <span className="hidden sm:inline">PDF</span>
+                </Button>
+              )}
+              <Button aria-label="Add hours" icon={<Plus aria-hidden className="size-4" />} onClick={addHours}>
+                <span className="hidden sm:inline">Add Hours</span>
+              </Button>
+            </>
           )
         }
       />
