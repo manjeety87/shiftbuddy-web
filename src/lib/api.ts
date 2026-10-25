@@ -60,7 +60,8 @@ const send = async (method: string, url: string, body: unknown, options: Request
   } catch {
     throw new HttpError("Network request failed");
   }
-  if (response.ok && options.responseType === "blob") return { data: await response.blob() };
+  // A file keeps its headers (the server names it in Content-Disposition), like axios
+  if (response.ok && options.responseType === "blob") return { data: await response.blob(), headers: Object.fromEntries(response.headers) };
   const data = await response.json().catch(() => null);
   if (!response.ok) {
     const error = new HttpError(data?.message ?? `Request failed (${response.status})`);
@@ -94,9 +95,9 @@ export const refreshSession = (): Promise<string> => {
 // On these a 401 means "wrong email/password/code", not "session expired"
 const CREDENTIAL_ENDPOINTS = ["/auth/login", "/auth/register", "/auth/google", "/auth/apple", "/auth/restore", "/auth/forgot-password", "/auth/reset-password", "/auth/change-password", "/auth/refresh-token", "/account/deletion"];
 
-const request = async <T>(method: string, url: string, body?: unknown, options?: RequestOptions): Promise<{ data: T }> => {
+const request = async <T>(method: string, url: string, body?: unknown, options?: RequestOptions): Promise<{ data: T; headers?: Record<string, string> }> => {
   try {
-    return (await send(method, url, body, options)) as { data: T };
+    return (await send(method, url, body, options)) as { data: T; headers?: Record<string, string> };
   } catch (error) {
     const status = (error as HttpError).response?.status;
     if (status !== 401 || CREDENTIAL_ENDPOINTS.some((path) => url.startsWith(path))) throw error;

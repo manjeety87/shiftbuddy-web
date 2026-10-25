@@ -9,10 +9,9 @@ import { SkeletonRows } from "@/components/ui/States";
 import { showDeletionNotice, longDate } from "@/features/auth/deletionNotice";
 import { getAccountSummary, requestAccountDeletion } from "@/lib/account";
 import { errorCode, errorMessage } from "@/lib/api";
-import { notify } from "@/lib/notify";
 import { useLogOut, useSession, useUser } from "@/lib/session";
+import { openSheet } from "@/lib/sheets";
 import { useFetch } from "@/lib/useFetch";
-import { downloadMyData } from "./downloadMyData";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 // The server's figure arrives with the summary; this is only for the moment before it does
@@ -35,7 +34,6 @@ export function DeleteAccountSheet({ onClose }: { onClose: () => void }) {
   const [secret, setSecret] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [downloading, setDownloading] = useState(false);
   // The day it would go if they confirm now — fixed when the panel opens
   const [openedAt] = useState(Date.now);
 
@@ -43,18 +41,6 @@ export function DeleteAccountSheet({ onClose }: { onClose: () => void }) {
   const purgeDay = longDate(new Date(openedAt + graceDays * DAY_MS).toISOString());
   const usesPassword = user.hasPassword;
   const ready = usesPassword ? secret.length > 0 : secret.trim().toUpperCase() === CONFIRM_WORD;
-
-  const download = async () => {
-    setDownloading(true);
-    try {
-      await downloadMyData();
-      notify.success("Your data is downloading");
-    } catch (failure) {
-      notify.error("Couldn’t download your data", { description: errorMessage(failure) });
-    } finally {
-      setDownloading(false);
-    }
-  };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -102,7 +88,7 @@ export function DeleteAccountSheet({ onClose }: { onClose: () => void }) {
       </ol>
 
       <div className="mt-6 grid gap-2 sm:grid-cols-2">
-        <Alternative icon={Download} title="Keep a copy first" text="Download your data as a file." onClick={download} busy={downloading} />
+        <Alternative icon={Download} title="Keep a record first" text="Download a statement of your shifts." onClick={() => openSheet({ kind: "statement" })} />
         <Alternative icon={LogOut} title="Only need a break?" text="Log out instead. Nothing is deleted." onClick={logOut} />
       </div>
 

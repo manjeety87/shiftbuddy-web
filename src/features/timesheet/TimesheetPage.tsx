@@ -15,10 +15,10 @@ import { errorMessage } from "@/lib/api";
 import { formatMoney } from "@/lib/inputs";
 import { jobName } from "@/lib/jobLabels";
 import { notify } from "@/lib/notify";
-import { saveFile } from "@/lib/saveFile";
+import { downloadStatement } from "@/lib/downloadStatement";
 import { formatDuration } from "@/lib/shiftTime";
 import { openSheet } from "@/lib/sheets";
-import { formatCalendarDay, getHoursSummary, getStatementPdf, getTimesheet, useTimesheetChanged, type HoursSummary, type SummaryRange, type TimesheetEntry, type WeekTimesheet } from "@/lib/timesheet";
+import { formatCalendarDay, getHoursSummary, getTimesheet, useTimesheetChanged, type HoursSummary, type SummaryRange, type TimesheetEntry, type WeekTimesheet } from "@/lib/timesheet";
 import { useFetch } from "@/lib/useFetch";
 import { useMyJobs } from "@/lib/useMyJobs";
 import { jobOptionLabel } from "../jobs/JobSelect";
@@ -90,15 +90,14 @@ export function TimesheetPage() {
   const hasJobSplit = !isAllTime && (summary?.byJob.length ?? 0) > 0;
   const addHours = () => openSheet({ kind: "timeEntry", jobId: jobId === ALL_JOBS ? undefined : jobId });
 
-  // The period on screen as a PDF statement, to keep or send. All time is a history, not a statement.
+  // The days on screen as a shift statement (the same PDF as Settings › Your data). All time is a history, not a statement.
   const [downloading, setDownloading] = useState(false);
   const canDownload = !isAllTime && !!period?.start && (totals?.entryCount ?? 0) > 0;
   const downloadPdf = async () => {
     if (!period?.start) return;
     setDownloading(true);
     try {
-      const pdf = await getStatementPdf(jobId === ALL_JOBS ? { range: range as Exclude<SummaryRange, "all">, offset } : { jobId, offset });
-      saveFile(pdf, `shiftbuddy-hours-${period.start}-to-${period.end ?? period.start}.pdf`);
+      await downloadStatement({ range: "custom", from: period.start, to: period.end ?? period.start, ...(jobId !== ALL_JOBS && { jobId }) });
     } catch (failure) {
       notify.error("Couldn’t make the PDF", { description: errorMessage(failure) });
     } finally {

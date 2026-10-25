@@ -62,3 +62,13 @@ export const getShiftsSummary = async (params?: { jobId?: string; from?: string;
     const { data } = await api.get<{ data: PaySummary }>('/shifts/summary', { params });
     return data.data;
 };
+/** The stretches a statement covers: a preset (`offset` -1 = the one before), or a first and last day (YYYY-MM-DD, both included). */
+export type StatementRange = 'week' | 'twoWeeks' | 'month' | 'threeMonths';
+export type StatementRequest = ({ range: StatementRange; offset?: number } | { range: 'custom'; from: string; to: string }) & { jobId?: string };
+
+/** The shifts worked in a stretch as a PDF (`GET /shifts/statement`), under the file name the server gives it. */
+export const getStatementPdf = async (request: StatementRequest): Promise<{ pdf: Blob; filename: string }> => {
+    const { data, headers } = await api.get<Blob>('/shifts/statement', { params: { ...request, timeZone: deviceTimeZone() }, responseType: 'blob' });
+    const filename = /filename="([^"]+)"/.exec(headers?.['content-disposition'] ?? '')?.[1] ?? 'shiftbuddy-statement.pdf';
+    return { pdf: data, filename };
+};

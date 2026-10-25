@@ -24,6 +24,7 @@ export type SheetRequest =
   | { kind: "customTheme" }
   | { kind: "welcome"; replay?: boolean }
   | { kind: "arrival" }
+  | { kind: "statement"; jobId?: string }
   | { kind: "shared"; ownerId: string; ownerName: string; date?: Date }
   | { kind: "verifyEmail" }
   | { kind: "password" }

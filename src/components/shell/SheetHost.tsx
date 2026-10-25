@@ -10,6 +10,7 @@ import { ScanSheet } from "@/features/scan/ScanSheet";
 import { HomeAddressSheet, PasswordSheet, VerifyEmailSheet } from "@/features/settings/AccountSheets";
 import { ArrivalSheet } from "@/features/settings/ArrivalSheet";
 import { DeleteAccountSheet } from "@/features/settings/DeleteAccountSheet";
+import { StatementSheet } from "@/features/settings/StatementSheet";
 import { SharedSheet } from "@/features/sharing/SharedSheet";
 import { CopySheet } from "@/features/shifts/CopySheet";
 import { CopyWeekSheet } from "@/features/shifts/CopyWeekSheet";
@@ -44,6 +45,8 @@ const render = (request: SheetRequest, onClose: () => void) => {
       return <WelcomeSheet replay={request.replay} onClose={onClose} />;
     case "arrival":
       return <ArrivalSheet onClose={onClose} />;
+    case "statement":
+      return <StatementSheet jobId={request.jobId} onClose={onClose} />;
     case "themes":
       return <ThemesSheet onClose={onClose} />;
     case "customTheme":

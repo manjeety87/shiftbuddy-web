@@ -19,7 +19,6 @@ import { notify } from "@/lib/notify";
 import { setPreference, useIsWide, usePreference } from "@/lib/preferences";
 import { useLogOut, useSession, useUser } from "@/lib/session";
 import { openSheet, type SheetRequest } from "@/lib/sheets";
-import { downloadMyData } from "./downloadMyData";
 import { SignedInDevices } from "./SignedInDevices";
 
 const COMMUTE_MODES = [
@@ -142,7 +141,7 @@ export function SettingsPage() {
   const logOut = useLogOut();
   const [name, setName] = useState(user.name);
   const [tax, setTax] = useState(String(user.taxDeductionPercent));
-  const [saving, setSaving] = useState<"name" | "tax" | "download" | null>(null);
+  const [saving, setSaving] = useState<"name" | "tax" | null>(null);
   const showGuide = usePreference("gettingStarted") === "shown";
   const features = featuresOf(user);
   const isCustomArrival = arrivalBufferChoice(user.arrivalBufferMinutes) === "custom";
@@ -196,18 +195,6 @@ export function SettingsPage() {
     openSheet({ kind: "verifyEmail" } satisfies SheetRequest);
     // A fresh code, in case the one from sign-up has expired
     await sendVerificationCode().catch(() => undefined);
-  };
-
-  const download = async () => {
-    setSaving("download");
-    try {
-      await downloadMyData();
-      notify.success("Your data is downloading");
-    } catch (failure) {
-      notify.error("Couldn’t download your data", { description: errorMessage(failure) });
-    } finally {
-      setSaving(null);
-    }
   };
 
   return (
@@ -383,10 +370,10 @@ export function SettingsPage() {
             <SignedInDevices />
           </Section>
 
-          <Section id="data" title="Your data" open={open} description="It’s yours: take a copy, choose who sees it, or delete it.">
-            <Setting label="Download your data" help="Your profile, jobs, shifts, hours worked and sharing, as a file you can keep.">
-              <Button variant="secondary" busy={saving === "download"} onClick={download}>
-                Download
+          <Section id="data" title="Your data" open={open} description="It’s yours: keep a record, choose who sees it, or delete it.">
+            <Setting label="Shift statement" help="Every shift you worked for a week, a month, three months or any dates, as a PDF.">
+              <Button variant="secondary" onClick={() => openSheet({ kind: "statement" })}>
+                Download…
               </Button>
             </Setting>
             <Setting label="Who sees your schedule" help="People you share your shifts with, and for how long.">

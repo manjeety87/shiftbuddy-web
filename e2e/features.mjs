@@ -26,6 +26,8 @@ page.setDefaultTimeout(20000);
 const problems = [];
 page.on("console", (message) => message.type() === "error" && !/status of (401|409|422)|tile\.openstreetmap/.test(message.text()) && problems.push(`console: ${message.text()}`));
 page.on("pageerror", (error) => problems.push(`page error: ${error.message}`));
+// The console only says "500"; name the request so a server error can be traced
+page.on("response", (response) => response.status() >= 500 && problems.push(`server error: ${response.status()} ${response.request().method()} ${new URL(response.url()).pathname}`));
 
 const step = async (name, work) => {
   try {
@@ -247,11 +249,31 @@ try {
     await shot("f8-timesheet");
   });
 
-  await step("timesheet: PDF downloads the week as a statement", async () => {
-    const [download] = await Promise.all([page.waitForEvent("download"), ui.getByRole("button", { name: "Download PDF" }).click()]);
-    if (!/^shiftbuddy-hours-\d{4}-\d{2}-\d{2}-to-\d{4}-\d{2}-\d{2}\.pdf$/.test(download.suggestedFilename())) throw new Error(`file name: ${download.suggestedFilename()}`);
+  const isStatement = async (download) => {
+    if (!/^shiftbuddy-statement-\d{4}-\d{2}-\d{2}-to-\d{4}-\d{2}-\d{2}\.pdf$/.test(download.suggestedFilename())) throw new Error(`file name: ${download.suggestedFilename()}`);
     const file = readFileSync(await download.path());
     if (file.subarray(0, 5).toString() !== "%PDF-" || file.length < 1500) throw new Error(`not a PDF (${file.length} bytes)`);
+  };
+
+  await step("timesheet: PDF downloads the week as a statement", async () => {
+    const [download] = await Promise.all([page.waitForEvent("download"), ui.getByRole("button", { name: "Download PDF" }).click()]);
+    await isStatement(download);
+  });
+
+  await step("settings: Shift statement — 3 months, then custom dates (backwards dates are caught first)", async () => {
+    await page.goto(`${BASE}/settings`);
+    await ui.getByRole("button", { name: "Download…" }).click();
+    await sheet().getByText("3 Months", { exact: true }).click();
+    const [threeMonths] = await Promise.all([page.waitForEvent("download"), sheet().getByRole("button", { name: "Download" }).click()]);
+    await isStatement(threeMonths);
+    await closed();
+
+    await ui.getByRole("button", { name: "Download…" }).click();
+    await sheet().getByText("Custom", { exact: true }).click();
+    if (!(await sheet().getByRole("button", { name: "Download" }).isEnabled())) throw new Error("this month so far should be allowed");
+    const [custom] = await Promise.all([page.waitForEvent("download"), sheet().getByRole("button", { name: "Download" }).click()]);
+    await isStatement(custom);
+    await closed();
   });
 
   // A share only becomes active once the receiver's email is verified, which a test

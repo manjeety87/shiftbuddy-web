@@ -27,12 +27,6 @@ export const getAccountSummary = async (): Promise<AccountSummary> => {
     return data.data;
 };
 
-/** Everything in the account as one JSON document (profile, jobs, shifts, hours, sharing). */
-export const exportMyData = async (): Promise<unknown> => {
-    const { data } = await api.get<{ data: unknown }>('/account/export');
-    return data.data;
-};
-
 /**
  * Asks for the account to be deleted: a password account sends its password, a
  * Google/Apple one the word DELETE. It is signed out everywhere at once and erased
