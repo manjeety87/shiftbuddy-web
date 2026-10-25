@@ -114,8 +114,10 @@ export function ShiftSheet({ shiftId, date, onClose }: { shiftId?: string; date?
 
   // Hours were added or changed — or the shift marked missed — in the sheet above this one:
   // refresh the rows, leave the form alone
+  // A delete also signals a change while the sheet is still closing: the shift is gone, nothing to reload
+  const removed = useRef(false);
   const reloadSaved = () => {
-    if (shiftId) getShiftById(shiftId).then(setSaved).catch(() => undefined);
+    if (shiftId && !removed.current) getShiftById(shiftId).then(setSaved).catch(() => undefined);
   };
   useTimesheetChanged(reloadSaved);
   useShiftsChanged(reloadSaved);
@@ -167,8 +169,12 @@ export function ShiftSheet({ shiftId, date, onClose }: { shiftId?: string; date?
   const remove = async () => {
     if (!saved) return;
     setBusy("delete");
+    removed.current = true;
     if (await deleteShiftsWithUndo([saved])) sheet.current?.dismiss();
-    else setBusy(null);
+    else {
+      removed.current = false;
+      setBusy(null);
+    }
   };
 
   const hasStarted = saved && (Date.parse(saved.startTime) <= openedAt || !!saved.timeEntries?.length);

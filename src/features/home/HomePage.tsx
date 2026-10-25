@@ -24,7 +24,7 @@ import { getIncomingShares, getSharedShifts } from "@/lib/shares";
 import { useShiftsChanged } from "@/lib/shiftEvents";
 import { getMyShifts } from "@/lib/shifts";
 import { formatDuration } from "@/lib/shiftTime";
-import { openSheet, usePickedDay } from "@/lib/sheets";
+import { openSheet, useOpenSheets, usePickedDay } from "@/lib/sheets";
 import { featuresOf } from "@/lib/features";
 import { clockIn, CLOCK_IN_OPENS_MINUTES_BEFORE, clockOut, getCurrentEntry, getUnloggedShifts, useTimesheetChanged, type TimeEntry } from "@/lib/timesheet";
 import { commuteLabel } from "@/lib/travelConflicts";
@@ -419,11 +419,13 @@ export function HomePage() {
 
   // A brand-new account (no job yet) gets the welcome once on this browser. Marked seen
   // as it opens, so a re-render can't open a second one; people who already use the app never see it.
+  // It waits for any open panel (sign-up's Verify Your Email) to close, so it never lands under one.
+  const isPanelOpen = useOpenSheets().length > 0;
   useEffect(() => {
-    if (jobs.data?.length !== 0 || welcomeSeen === "yes") return;
+    if (jobs.data?.length !== 0 || welcomeSeen === "yes" || isPanelOpen) return;
     setPreference("welcomeSeen", "yes");
     openSheet({ kind: "welcome" });
-  }, [jobs.data?.length, welcomeSeen]);
+  }, [jobs.data?.length, welcomeSeen, isPanelOpen]);
 
   useShiftsChanged(() => {
     week.refetch();

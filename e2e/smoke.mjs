@@ -30,11 +30,13 @@ const context = await browser.newContext({ viewport: { width: 1280, height: 860 
 const page = await context.newPage();
 const problems = [];
 // The browser logs every 401/409 itself; those are judged by the response check below
-page.on("console", (message) => message.type() === "error" && !/status of (401|404|409)/.test(message.text()) && problems.push(`console: ${message.text()}`));
+page.on("console", (message) => message.type() === "error" && !/status of (401|403|404|409)/.test(message.text()) && problems.push(`console: ${message.text()}`));
 page.on("pageerror", (error) => problems.push(`page error: ${error.message}`));
 page.on("response", (response) => {
   // 401 before login and the 409 from the overlap check are part of the flows
-  const expected = [401, 409].includes(response.status()) || (response.status() === 404 && response.url().includes("/api/auth/")); // 404 = "no such account"
+  const isAuth = response.url().includes("/api/auth/");
+  // 404 = "no such account"; 403 = an account set to be deleted, answered with "Restore your account?"
+  const expected = [401, 409].includes(response.status()) || (isAuth && [403, 404].includes(response.status()));
   if (response.status() >= 400 && !expected) problems.push(`${response.status()} ${response.request().method()} ${response.url()}`);
 });
 
@@ -203,6 +205,8 @@ try {
 
   await step("sharing: message preview, invite someone, stop sharing", async () => {
     await ui.getByRole("link", { name: "Sharing" }).first().click();
+    // The shift is tomorrow: on a Saturday that is already next week (weeks start on Sunday)
+    if (new Date().getDay() === 6) await ui.getByRole("radio", { name: "Next week" }).check({ force: true });
     await visible(page.locator("pre")).filter({ hasText: "Boathouse" }).waitFor();
     await ui.getByLabel("Their email").fill(`friend-${run}@test.local`);
     await ui.getByRole("button", { name: "Share My Schedule" }).click();

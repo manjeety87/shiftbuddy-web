@@ -147,7 +147,9 @@ npm run test:e2e        # in another terminal
 ```
 
 They create `@test.local` accounts and delete them afterwards. The backend allows
-20 sign-in attempts per 15 minutes per address, so several runs in a row get a 429.
+20 sign-in attempts per 15 minutes per address, and the four suites together sign in
+more than that from one machine: run the backend with `RATE_LIMIT_SCALE=10` in its
+`.env` (ignored in production), or the last suite starts logged out with a 429.
 
 ## Not built yet
 
