@@ -19,6 +19,8 @@ import { formatCalendarDay, getHoursSummary, getTimesheet, useTimesheetChanged, 
 import { useFetch } from "@/lib/useFetch";
 import { useMyJobs } from "@/lib/useMyJobs";
 import { jobOptionLabel } from "../jobs/JobSelect";
+import { featuresOf } from "@/lib/features";
+import { useUser } from "@/lib/session";
 
 const ALL_JOBS = "all";
 
@@ -69,6 +71,8 @@ export function TimesheetPage() {
   const payday = data?.job?.period.payday;
   const missingRates = summary?.totals.missingRates ?? false;
   const taxPercent = summary?.taxDeductionPercent ?? data?.job?.taxDeductionPercent;
+  // With pay estimates switched off (Settings › Features) the timesheet is hours only
+  const showPay = featuresOf(useUser()).pay;
   const isAllTime = jobId === ALL_JOBS && range === "all";
 
   const periodLabel = (() => {
@@ -175,10 +179,10 @@ export function TimesheetPage() {
                         {formatDuration(totals.breakMinutes)}
                       </Stat>
                     )}
-                    <Stat label="Gross pay">{totals.grossPay != null ? formatMoney(totals.grossPay) : "—"}</Stat>
-                    <Stat label={taxPercent != null ? `Est. pay · after ${taxPercent}%` : "Est. pay"}>{totals.estimatedPay != null ? formatMoney(totals.estimatedPay) : "—"}</Stat>
+                    {showPay && <Stat label="Gross pay">{totals.grossPay != null ? formatMoney(totals.grossPay) : "—"}</Stat>}
+                    {showPay && <Stat label={taxPercent != null ? `Est. pay · after ${taxPercent}%` : "Est. pay"}>{totals.estimatedPay != null ? formatMoney(totals.estimatedPay) : "—"}</Stat>}
                   </dl>
-                  {totals.grossPay != null && taxPercent != null && (
+                  {showPay && totals.grossPay != null && taxPercent != null && (
                     <p className="mt-2.5 text-xs text-pretty text-muted-foreground">
                       Est. pay is gross less your {taxPercent}% deduction estimate.{" "}
                       <Link href="/settings#pay" className="font-medium text-primary pointer-fine:hover:underline">
@@ -186,7 +190,7 @@ export function TimesheetPage() {
                       </Link>
                     </p>
                   )}
-                  {(data.job || missingRates) && (
+                  {(data.job || (showPay && missingRates)) && (
                     <p className="mt-2.5 text-xs text-pretty text-muted-foreground">
                       {data.job &&
                         (payday ? (
@@ -200,8 +204,8 @@ export function TimesheetPage() {
                             to match your pay stub.
                           </>
                         ))}
-                      {data.job && totals.grossPay == null && " Add an hourly rate to the job to see pay."}
-                      {missingRates && "Some hours are for jobs without an hourly rate, so they aren’t in the pay figure."}
+                      {showPay && data.job && totals.grossPay == null && " Add an hourly rate to the job to see pay."}
+                      {showPay && missingRates && "Some hours are for jobs without an hourly rate, so they aren’t in the pay figure."}
                     </p>
                   )}
                 </section>
@@ -245,6 +249,7 @@ export function TimesheetPage() {
                                 <span className="block text-sm text-muted-foreground tabular-nums md:hidden">
                                   {formatTime(entry.clockIn)} – {entry.clockOut ? out : "still clocked in"}
                                   {entry.breakMinutes > 0 && ` · ${entry.breakMinutes} min break`}
+                                  {entry.isAutomatic && " · added for you"}
                                 </span>
                               </span>
                               <span className="hidden min-w-0 items-center gap-2 text-sm md:flex">
@@ -252,6 +257,7 @@ export function TimesheetPage() {
                                   <>
                                     <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ backgroundColor: entry.job.color }} />
                                     <span className="truncate">{jobName(entry.job)}</span>
+                                    {entry.isAutomatic && <span className="shrink-0 rounded-full bg-muted px-1.5 py-px text-2xs font-semibold text-muted-foreground">Added for you</span>}
                                   </>
                                 ) : (
                                   <span className="text-muted-foreground">—</span>
@@ -305,6 +311,7 @@ function EmptyHours({ text, onAdd }: { text: string; onAdd: () => void }) {
  * opens that job's pay period, to check against a stub.
  */
 function ByJob({ summary, wide = false, onOpen }: { summary: HoursSummary; wide?: boolean; onOpen: (jobId: string) => void }) {
+  const showPay = featuresOf(useUser()).pay;
   return (
     <section aria-label="By job">
       <h2 className="mb-2.5 text-sm font-semibold">By job</h2>
@@ -317,13 +324,15 @@ function ByJob({ summary, wide = false, onOpen }: { summary: HoursSummary; wide?
                 <span className="block truncate text-sm font-medium">{jobName(line.job)}</span>
                 <span className="block truncate text-xs text-muted-foreground tabular-nums">
                   {formatDuration(line.paidMinutes)} · {line.entryCount} {line.entryCount === 1 ? "shift" : "shifts"}
-                  {line.job.hourlyRate != null && ` · ${formatMoney(line.job.hourlyRate)}/h`}
+                  {showPay && line.job.hourlyRate != null && ` · ${formatMoney(line.job.hourlyRate)}/h`}
                 </span>
               </span>
-              <span className={`shrink-0 text-right tabular-nums ${wide ? "sm:min-w-28" : ""}`}>
-                <span className="block text-sm font-semibold">{line.grossPay != null ? formatMoney(line.grossPay) : "—"}</span>
-                <span className="block text-xs text-muted-foreground">{line.estimatedPay != null ? `est. ${formatMoney(line.estimatedPay)}` : "no rate"}</span>
-              </span>
+              {showPay && (
+                <span className={`shrink-0 text-right tabular-nums ${wide ? "sm:min-w-28" : ""}`}>
+                  <span className="block text-sm font-semibold">{line.grossPay != null ? formatMoney(line.grossPay) : "—"}</span>
+                  <span className="block text-xs text-muted-foreground">{line.estimatedPay != null ? `est. ${formatMoney(line.estimatedPay)}` : "no rate"}</span>
+                </span>
+              )}
               <ChevronRight aria-hidden className="size-4 shrink-0 text-faint" />
             </button>
           </li>

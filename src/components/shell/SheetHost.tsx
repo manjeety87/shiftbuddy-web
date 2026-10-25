@@ -8,6 +8,7 @@ import { ConflictSheet } from "@/features/conflicts/ConflictSheet";
 import { JobSheet } from "@/features/jobs/JobSheet";
 import { ScanSheet } from "@/features/scan/ScanSheet";
 import { HomeAddressSheet, PasswordSheet, VerifyEmailSheet } from "@/features/settings/AccountSheets";
+import { ArrivalSheet } from "@/features/settings/ArrivalSheet";
 import { DeleteAccountSheet } from "@/features/settings/DeleteAccountSheet";
 import { SharedSheet } from "@/features/sharing/SharedSheet";
 import { CopySheet } from "@/features/shifts/CopySheet";
@@ -40,7 +41,9 @@ const render = (request: SheetRequest, onClose: () => void) => {
     case "conflict":
       return <ConflictSheet conflict={request.conflict} fromId={request.fromId} toId={request.toId} onClose={onClose} />;
     case "welcome":
-      return <WelcomeSheet onClose={onClose} />;
+      return <WelcomeSheet replay={request.replay} onClose={onClose} />;
+    case "arrival":
+      return <ArrivalSheet onClose={onClose} />;
     case "themes":
       return <ThemesSheet onClose={onClose} />;
     case "customTheme":

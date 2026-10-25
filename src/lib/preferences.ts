@@ -4,18 +4,15 @@ import { useSyncExternalStore } from "react";
 
 // How this browser likes the app laid out. Not account data: it stays in
 // localStorage (like the theme), so a shared computer and a phone can differ.
+// Which parts of the app are on is account data (lib/features.ts).
 
 const DEFAULTS = {
   /** Home's calendar: one week as columns, or the whole month */
   homeView: "week" as "week" | "month",
-  /** Whether Home's calendar also shows the schedules other people share with you */
-  sharedOnHome: "on" as "on" | "off",
   /** The three welcome slides a new account sees once on this browser */
   welcomeSeen: "no" as "no" | "yes",
   /** Home's "Getting started" checklist, until it's done or hidden */
   gettingStarted: "shown" as "shown" | "hidden",
-  /** Calendar's "in numbers" card: hours and estimated pay for the week or month shown */
-  calendarSummary: "on" as "on" | "off",
 };
 
 type Preferences = typeof DEFAULTS;
@@ -29,10 +26,8 @@ const read = <K extends Key>(key: K): Preferences[K] => {
     const saved = localStorage.getItem(storageKey(key));
     // Only values this version knows; anything else (an old or edited entry) falls back
     if (key === "homeView" && (saved === "week" || saved === "month")) return saved as Preferences[K];
-    if (key === "sharedOnHome" && (saved === "on" || saved === "off")) return saved as Preferences[K];
     if (key === "welcomeSeen" && (saved === "no" || saved === "yes")) return saved as Preferences[K];
     if (key === "gettingStarted" && (saved === "shown" || saved === "hidden")) return saved as Preferences[K];
-    if (key === "calendarSummary" && (saved === "on" || saved === "off")) return saved as Preferences[K];
   } catch {
     // Storage blocked (private window): the defaults apply
   }

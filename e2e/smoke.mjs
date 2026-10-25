@@ -91,11 +91,27 @@ try {
     await settle();
     await shot("02-verify-email");
     await sheet().getByRole("button", { name: "Cancel" }).click();
+    // A brand-new account then gets the welcome tour (next step)
+    await sheet().getByText("Every job in one place").waitFor();
+  });
+
+  await step("a new account gets the welcome tour, ending with the extras to switch on", async () => {
+    await sheet().getByText("Every job in one place").waitFor();
+    for (let i = 0; i < 3; i++) await sheet().getByRole("button", { name: "Next" }).click();
+    await sheet().getByText("Make it yours").waitFor();
+    // The timesheet and pay estimates start off; the checks below use both
+    await sheet().getByRole("switch", { name: "Clock in & timesheet" }).click();
+    await sheet().getByRole("switch", { name: "Pay estimates" }).click();
+    await sheet().getByRole("switch", { name: "Add my hours for me" }).waitFor(); // shows once the timesheet is on
+    await settle();
+    await shot("03-welcome-extras");
+    await sheet().getByRole("button", { name: "Cancel" }).click();
     await closed();
   });
 
-  await step("a new account sees Add Shift / Scan Schedule, not an empty card", async () => {
-    await ui.getByRole("heading", { name: "No shifts coming up" }).waitFor();
+  await step("then Home shows the getting started guide", async () => {
+    await ui.getByRole("heading", { name: "Getting started" }).waitFor();
+    await ui.getByText("Clock in at a shift").waitFor(); // the timesheet is on now
     await shot("03-home-empty");
   });
 
@@ -125,7 +141,7 @@ try {
     await shot("05-shift-sheet");
     await sheet().getByRole("button", { name: "Add", exact: true }).click();
     await closed();
-    await ui.getByText("Next shift · Tomorrow").waitFor();
+    await ui.getByText(/Upcoming shift · Tomorrow/i).waitFor();
     await page.waitForTimeout(600);
     await shot("06-home");
   });
@@ -202,6 +218,8 @@ try {
     const look = () => page.evaluate(() => `${document.documentElement.dataset.theme} ${document.documentElement.dataset.mode}`);
     const saved = () => page.evaluate(() => `${localStorage.getItem("shiftbuddy.theme")} ${localStorage.getItem("shiftbuddy.mode")}`);
     const before = await saved();
+    // Profile and pay have Save buttons too: the theme's is in the preview bar
+    const saveTheme = () => ui.getByRole("status").filter({ hasText: "Previewing" }).getByRole("button", { name: "Save", exact: true }).click();
     await ui.getByRole("radio", { name: /Lavender Dusk/ }).click();
     await ui.getByRole("radio", { name: "Dark", exact: true }).check({ force: true }); // every theme has a dark side
     await page.waitForFunction(() => document.documentElement.dataset.mode === "dark");
@@ -213,7 +231,7 @@ try {
 
     await ui.getByRole("radio", { name: /Lavender Dusk/ }).click();
     await ui.getByRole("radio", { name: "Dark", exact: true }).check({ force: true });
-    await ui.getByRole("button", { name: "Save", exact: true }).click();
+    await saveTheme();
     if ((await saved()) !== "lavenderDusk dark") throw new Error(`Save did not keep it: ${await saved()}`);
     await ui.getByRole("radio", { name: "Driving" }).check({ force: true });
     await page.waitForTimeout(500);
@@ -244,7 +262,7 @@ try {
 
     await ui.getByRole("radio", { name: /Sunsama Focus/ }).click();
     await ui.getByRole("radio", { name: "Light", exact: true }).check({ force: true });
-    await ui.getByRole("button", { name: "Save", exact: true }).click();
+    await saveTheme();
     if ((await look()) !== "sunsamaFocus light") throw new Error(`could not go back to light: ${await look()}`);
   });
 
@@ -258,7 +276,7 @@ try {
   await step("phone width: bottom tabs instead of the sidebar", async () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`${BASE}/home`);
-    await ui.getByText("Next shift · Tomorrow").waitFor();
+    await ui.getByText(/Upcoming shift · Tomorrow/i).waitFor();
     if ((await visible(page.locator("aside")).count()) > 0) throw new Error("the sidebar is showing on a phone");
     if ((await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)) > 0) throw new Error("the page scrolls sideways");
     await page.waitForTimeout(600);

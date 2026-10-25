@@ -1,4 +1,5 @@
 import { BriefcaseBusiness, CalendarClock, CalendarDays, ClipboardList, House, Settings, Users, type LucideIcon } from "lucide-react";
+import type { Features } from "@/interfaces/user.d";
 
 export interface NavItem {
   href: string;
@@ -25,6 +26,9 @@ export const ALL_PLACES: NavItem[] = [...SIDEBAR_GROUPS.flatMap((group) => group
 
 /** A phone's tab bar fits five — the mobile app's tabs. Timesheet and Sharing are reached from Settings there. */
 export const TAB_ITEMS: NavItem[] = [HOME, SHIFTS, CALENDAR, JOBS, SETTINGS];
+
+/** Whether a place is part of the app as switched on (Settings › Features): Timesheet goes with the timesheet. */
+export const isShown = (features: Features) => (item: NavItem) => item.href !== TIMESHEET.href || features.timesheet;
 
 /** A section stays lit on its inner pages too. */
 export const isActive = (pathname: string, href: string) => pathname === href || pathname.startsWith(`${href}/`);

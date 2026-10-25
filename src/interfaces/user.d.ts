@@ -8,6 +8,20 @@ export interface Place {
 
 export type CommuteMode = 'TRANSIT' | 'DRIVING';
 
+/** Parts of the app switched on or off — the backend fills in every key (constants/features.js) */
+export interface Features {
+    leaveBy: boolean;
+    weather: boolean;
+    timesheet: boolean;
+    pay: boolean;
+    sharedOnHome: boolean;
+    calendarSummary: boolean;
+    /** With the timesheet on: a finished shift's scheduled hours are added by themselves */
+    autoHours: boolean;
+}
+
+export type FeatureKey = keyof Features;
+
 export interface User {
     id: string;
     name: string;
@@ -20,6 +34,7 @@ export interface User {
     homeLocation: Place | null; // travel time home ↔ job ke liye
     commuteMode: CommuteMode; // how travel time between places is worked out
     arrivalBufferMinutes: number; // how early to aim to arrive at a shift (0 = on time)
+    features: Features;
 }
 
 /** A browser never receives the refresh token: the backend keeps it in an httpOnly cookie. */

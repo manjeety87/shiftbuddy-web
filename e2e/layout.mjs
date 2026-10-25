@@ -89,6 +89,8 @@ try {
 
   // Registering with the cookie transport leaves the refresh cookie in this browser: the pages open signed in
   token = (await api("post", "/auth/register", { name: "Layout Tester With A Fairly Long Name", email, password: "Testing123" })).accessToken;
+  // A new account starts with the timesheet and pay estimates off; these screens show them
+  await api("patch", "/auth/profile", { features: { timesheet: true, pay: true } });
   await context.addCookies([{ name: "sb_signed_in", value: "1", url: BASE }]);
   const near = await api("post", "/jobs", { title: "Sales Associate and Keyholder", companyName: "International Clothiers Yorkdale", hourlyRate: 18.5, latitude: 43.7254, longitude: -79.4522, location: "Yorkdale Shopping Centre, 3401 Dufferin St, Toronto" });
   const far = await api("post", "/jobs", { title: "Cashier", companyName: "Fairweather", latitude: 43.7765, longitude: -79.2578, location: "Scarborough Town Centre, Toronto" });

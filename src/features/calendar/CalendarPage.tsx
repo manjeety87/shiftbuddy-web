@@ -4,7 +4,7 @@ import { Plus } from "lucide-react";
 import { useRef, useState, type KeyboardEvent } from "react";
 import { PeriodNav } from "@/components/PeriodNav";
 import { PeriodSummary } from "@/components/PeriodSummary";
-import { usePreference } from "@/lib/preferences";
+import { featuresOf } from "@/lib/features";
 import { isHappeningNow, ShiftList, ShiftRow, shortTime } from "@/components/ShiftRow";
 import { Button } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -16,6 +16,7 @@ import { addDays, formatDayLabel, startOfDay } from "@/lib/inputs";
 import { jobName } from "@/lib/jobLabels";
 import { useShiftsChanged } from "@/lib/shiftEvents";
 import { useIsWide } from "@/lib/preferences";
+import { useUser } from "@/lib/session";
 import { getMyShifts } from "@/lib/shifts";
 import { openSheet, usePickedDay } from "@/lib/sheets";
 import { useFetch } from "@/lib/useFetch";
@@ -47,7 +48,7 @@ export function CalendarPage() {
   const view = useIsWide() ? "month" : phoneView;
   const [summaryPeriod, setSummaryPeriod] = useState<"week" | "month">("month");
   // Settings › Customize can hide the hours-and-pay card
-  const showSummary = usePreference("calendarSummary") === "on";
+  const showSummary = featuresOf(useUser()).calendarSummary;
 
   const monthStart = new Date(selected.getFullYear(), selected.getMonth(), 1);
   const monthEnd = new Date(selected.getFullYear(), selected.getMonth() + 1, 1);

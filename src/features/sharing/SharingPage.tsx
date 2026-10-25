@@ -2,6 +2,7 @@
 
 import { ChevronRight, Copy, Share2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
+import { useFeatureToggle } from "@/components/FeatureSwitches";
 import { Button } from "@/components/ui/Button";
 import { FormError, inputClass, selectClass } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -11,7 +12,6 @@ import { Switch } from "@/components/ui/Switch";
 import { errorMessage } from "@/lib/api";
 import { showAlert } from "@/lib/dialog";
 import { notify } from "@/lib/notify";
-import { setPreference, usePreference } from "@/lib/preferences";
 import { getScheduleMessage, type ScheduleNameStyle, type ScheduleRange } from "@/lib/scheduleMessage";
 import { useUser } from "@/lib/session";
 import { formatShareExpiry, getIncomingShares, getOutgoingShares, SHARE_DURATIONS, shareShifts, stopSharing, type ShareDuration } from "@/lib/shares";
@@ -119,7 +119,7 @@ function ScheduleMessageCard() {
 
 export function SharingPage() {
   const user = useUser();
-  const showOnHome = usePreference("sharedOnHome") === "on";
+  const { features, toggle } = useFeatureToggle();
   const outgoing = useFetch(getOutgoingShares);
   const incoming = useFetch(getIncomingShares);
   const [email, setEmail] = useState("");
@@ -274,7 +274,7 @@ export function SharingPage() {
                 <p className="text-sm font-medium">Show on Home</p>
                 <p className="mt-0.5 text-xs text-pretty text-muted-foreground">Their shifts sit on your Home calendar next to your own. Off, they stay only on this page.</p>
               </div>
-              <Switch label="Show schedules shared with me on Home" checked={showOnHome} onChange={(checked) => setPreference("sharedOnHome", checked ? "on" : "off")} />
+              <Switch label="Show schedules shared with me on Home" checked={features.sharedOnHome} onChange={(checked) => toggle("sharedOnHome", checked)} />
             </div>
           )}
         </section>

@@ -1,6 +1,6 @@
 "use client";
 
-import { BriefcaseBusiness, ClipboardPen, LogOut, Palette, Plus, ScanLine, Search, type LucideIcon } from "lucide-react";
+import { BriefcaseBusiness, ClipboardPen, LayoutDashboard, LogOut, Palette, Plus, ScanLine, Search, type LucideIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { jobName, jobRole } from "@/lib/jobLabels";
@@ -9,7 +9,9 @@ import { openNewShift, openSheet } from "@/lib/sheets";
 import { THEMES } from "@/lib/themes";
 import { useMyJobs } from "@/lib/useMyJobs";
 import { setTheme } from "../theme/useTheme";
-import { ALL_PLACES } from "./nav";
+import { featuresOf } from "@/lib/features";
+import { useUser } from "@/lib/session";
+import { ALL_PLACES, isShown } from "./nav";
 
 interface Command {
   id: string;
@@ -29,6 +31,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const logOut = useLogOut();
   const { data: jobs } = useMyJobs();
+  const features = featuresOf(useUser());
   const dialog = useRef<HTMLDialogElement>(null);
   const list = useRef<HTMLUListElement>(null);
   const [query, setQuery] = useState("");
@@ -45,13 +48,14 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
       { id: "new-shift", group: "Actions", label: "New shift", icon: Plus, run: openNewShift },
       { id: "scan", group: "Actions", label: "Scan a schedule photo", icon: ScanLine, run: () => openSheet({ kind: "scan" }) },
       { id: "new-job", group: "Actions", label: "New job", icon: BriefcaseBusiness, run: () => openSheet({ kind: "job" }) },
-      { id: "hours", group: "Actions", label: "Add hours worked", icon: ClipboardPen, run: () => openSheet({ kind: "timeEntry" }) },
-      ...ALL_PLACES.map((place) => ({ id: place.href, group: "Go to", label: place.label, icon: place.icon, run: () => router.push(place.href) })),
+      ...(features.timesheet ? [{ id: "hours", group: "Actions", label: "Add hours worked", icon: ClipboardPen, run: () => openSheet({ kind: "timeEntry" }) }] : []),
+      { id: "features", group: "Go to", label: "Features", detail: "Switch extras on or off", icon: LayoutDashboard, run: () => router.push("/settings#features") },
+      ...ALL_PLACES.filter(isShown(features)).map((place) => ({ id: place.href, group: "Go to", label: place.label, icon: place.icon, run: () => router.push(place.href) })),
       ...(jobs ?? []).map((job) => ({ id: job.id, group: "Jobs", label: jobName(job), detail: jobRole(job) ?? undefined, icon: BriefcaseBusiness, colour: job.color, run: () => openSheet({ kind: "job", jobId: job.id }) })),
       ...THEMES.map((theme) => ({ id: theme.name, group: "Theme", label: theme.label, detail: theme.note, icon: Palette, run: () => setTheme(theme.name) })),
       { id: "log-out", group: "Account", label: "Log out", icon: LogOut, run: logOut },
     ],
-    [jobs, router, logOut],
+    [jobs, router, logOut, features],
   );
 
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);

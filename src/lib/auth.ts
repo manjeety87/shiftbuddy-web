@@ -1,4 +1,4 @@
-import type { AuthResponse, CommuteMode, Place, User } from '../interfaces/user.d';
+import type { AuthResponse, CommuteMode, Features, Place, User } from '../interfaces/user.d';
 import { api } from './api';
 import { clearTokens, saveTokens } from './storage';
 
@@ -19,6 +19,8 @@ export const updateProfile = async (data: {
     taxDeductionPercent?: number;
     commuteMode?: CommuteMode;
     arrivalBufferMinutes?: number;
+    /** Only the switches that change */
+    features?: Partial<Features>;
 }): Promise<User> => {
     const { data: response } = await api.patch<{ data: User }>('/auth/profile', data);
     return response.data;

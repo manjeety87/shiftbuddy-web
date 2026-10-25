@@ -8,8 +8,10 @@ import { openSheet } from "@/lib/sheets";
 export interface GettingStartedProgress {
   hasJob: boolean;
   hasShift: boolean;
-  hasHome: boolean;
-  hasClockedIn: boolean;
+  /** undefined: leave-by times are switched off, so the step isn't offered */
+  hasHome?: boolean;
+  /** undefined: the timesheet is switched off */
+  hasClockedIn?: boolean;
 }
 
 interface Step {
@@ -30,7 +32,8 @@ interface Step {
  * when hidden. The phone app's Home has the same card.
  */
 export function GettingStarted({ progress }: { progress: GettingStartedProgress }) {
-  const steps: Step[] = [
+  // A step for a feature that's switched off is null and left out
+  const candidates: (Step | null)[] = [
     { done: progress.hasJob, title: "Add your job", hint: "Each place you work, once. Shifts, pay and travel hang off it.", open: () => openSheet({ kind: "job" }) },
     {
       done: progress.hasShift,
@@ -44,9 +47,10 @@ export function GettingStarted({ progress }: { progress: GettingStartedProgress 
           ]
         : undefined,
     },
-    { done: progress.hasHome, title: "Set your home address", hint: "So we can tell you when to leave for each shift.", open: () => openSheet({ kind: "home" }) },
-    { done: progress.hasClockedIn, title: "Clock in at a shift", hint: "The Clock In button shows on your next shift 10 minutes before it starts." },
+    progress.hasHome === undefined ? null : { done: progress.hasHome, title: "Set your home address", hint: "So we can tell you when to leave for each shift.", open: () => openSheet({ kind: "home" }) },
+    progress.hasClockedIn === undefined ? null : { done: progress.hasClockedIn, title: "Clock in at a shift", hint: "The Clock In button shows on your next shift 10 minutes before it starts." },
   ];
+  const steps = candidates.filter((step): step is Step => step !== null);
   const doneCount = steps.filter((step) => step.done).length;
   if (doneCount === steps.length) return null;
 

@@ -21,6 +21,8 @@ import { useShiftsChanged } from "@/lib/shiftEvents";
 import { useTimesheetChanged } from "@/lib/timesheet";
 import { useMyJobs } from "@/lib/useMyJobs";
 import { JobSelect } from "../jobs/JobSelect";
+import { featuresOf } from "@/lib/features";
+import { useUser } from "@/lib/session";
 
 const MINUTE_MS = 60000;
 const MAX_NOTES = 500;
@@ -82,6 +84,7 @@ function MissedRow({ shift }: { shift: Shift }) {
 /** Add a shift (optionally on `date`), or change / delete one. */
 export function ShiftSheet({ shiftId, date, onClose }: { shiftId?: string; date?: Date; onClose: () => void }) {
   const sheet = useRef<SheetHandle>(null);
+  const features = featuresOf(useUser());
   const { data: jobs } = useMyJobs();
   const [saved, setSaved] = useState<Shift | null>(null);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
@@ -195,12 +198,16 @@ export function ShiftSheet({ shiftId, date, onClose }: { shiftId?: string; date?
           {/* What you can look up about a saved shift sits above the form, apart from what changes it */}
           {saved && (
             <div className="mb-5 flex flex-wrap gap-2">
-              <Button variant="secondary" size="sm" icon={<Navigation aria-hidden className="size-3.5" />} onClick={() => openSheet({ kind: "route", shiftId: saved.id })}>
-                Route
-              </Button>
-              <Button variant="secondary" size="sm" icon={<CloudSun aria-hidden className="size-3.5" />} onClick={() => openSheet({ kind: "weather", shiftId: saved.id })}>
-                Weather
-              </Button>
+              {features.leaveBy && (
+                <Button variant="secondary" size="sm" icon={<Navigation aria-hidden className="size-3.5" />} onClick={() => openSheet({ kind: "route", shiftId: saved.id })}>
+                  Route
+                </Button>
+              )}
+              {features.weather && (
+                <Button variant="secondary" size="sm" icon={<CloudSun aria-hidden className="size-3.5" />} onClick={() => openSheet({ kind: "weather", shiftId: saved.id })}>
+                  Weather
+                </Button>
+              )}
               <Button variant="secondary" size="sm" icon={<Copy aria-hidden className="size-3.5" />} onClick={() => openSheet({ kind: "copy", shiftIds: [saved.id] })}>
                 Copy
               </Button>
@@ -219,7 +226,7 @@ export function ShiftSheet({ shiftId, date, onClose }: { shiftId?: string; date?
             </div>
           )}
 
-          {saved && hasStarted && !saved.missedReason && (
+          {saved && hasStarted && !saved.missedReason && (features.timesheet || !!saved.timeEntries?.length) && (
             <div className="mb-4">
               <SectionLabel>Hours worked</SectionLabel>
               <HoursRow shift={saved} />

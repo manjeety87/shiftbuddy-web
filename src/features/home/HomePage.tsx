@@ -25,7 +25,8 @@ import { useShiftsChanged } from "@/lib/shiftEvents";
 import { getMyShifts } from "@/lib/shifts";
 import { formatDuration } from "@/lib/shiftTime";
 import { openSheet, usePickedDay } from "@/lib/sheets";
-import { clockIn, CLOCK_IN_OPENS_MINUTES_BEFORE, clockOut, getCurrentEntry, useTimesheetChanged, type TimeEntry } from "@/lib/timesheet";
+import { featuresOf } from "@/lib/features";
+import { clockIn, CLOCK_IN_OPENS_MINUTES_BEFORE, clockOut, getCurrentEntry, getUnloggedShifts, useTimesheetChanged, type TimeEntry } from "@/lib/timesheet";
 import { commuteLabel } from "@/lib/travelConflicts";
 import { useFetch } from "@/lib/useFetch";
 import { useMyJobs } from "@/lib/useMyJobs";
@@ -34,6 +35,7 @@ import { formatDegrees, getShiftWeather } from "@/lib/weather";
 import { GettingStarted } from "./GettingStarted";
 import { MonthBoard, PeopleFilter, WeekBoard, type BoardEntry, type BoardPerson } from "./ScheduleBoard";
 import { ComingUpCard, TodayCard, type ComingUp, type PersonToday } from "./TodayCard";
+import { UnloggedHoursCard } from "./UnloggedHoursCard";
 import { WeatherGlyph } from "../weather/WeatherSheet";
 
 const MINUTE_MS = 60000;
@@ -224,14 +226,15 @@ function LeaveRow({ shift, hasJobPin }: { shift: Shift; hasJobPin: boolean }) {
 /** The next shift on any day: when, how long until, the weather, when to leave, and the clock. */
 function UpcomingShiftCard({ shift, now, isClockedIn }: { shift: Shift; now: number; isClockedIn: boolean }) {
   const [busy, setBusy] = useState(false);
-  const { data: weather } = useFetch(() => getShiftWeather(shift.id).catch(() => null), [shift.id, shift.startTime]);
+  const features = featuresOf(useUser());
+  const { data: weather } = useFetch(() => (features.weather ? getShiftWeather(shift.id).catch(() => null) : Promise.resolve(null)), [shift.id, shift.startTime, features.weather]);
 
   const start = Date.parse(shift.startTime);
   const hasStarted = start <= now;
   const opensAt = start - CLOCK_IN_OPENS_MINUTES_BEFORE * MINUTE_MS;
   const role = jobRole(shift.job);
   const hasJobPin = shift.job.latitude != null;
-  const canClockIn = !isClockedIn && now >= opensAt;
+  const canClockIn = features.timesheet && !isClockedIn && now >= opensAt;
 
   const startClock = async () => {
     setBusy(true);
@@ -304,10 +307,10 @@ function UpcomingShiftCard({ shift, now, isClockedIn }: { shift: Shift; now: num
               <span className="block truncate text-xs">{Date.parse(shift.endTime) > now ? `${formatCountdown(shift.endTime)} left` : "Finished"}</span>
             </span>
           </div>
-        ) : (
+        ) : features.leaveBy ? (
           // Keyed by shift: "From home?" is a what-if for this one shift, never carried to the next
           <LeaveRow key={shift.id} shift={shift} hasJobPin={hasJobPin} />
-        )}
+        ) : null}
 
         {canClockIn ? (
           // The card's one solid button: starting the clock is what the user is here for once the shift comes
@@ -323,15 +326,15 @@ function UpcomingShiftCard({ shift, now, isClockedIn }: { shift: Shift; now: num
             <span className="text-base font-bold">Clock In</span>
             <span className="text-sm font-semibold tabular-nums">· {countdown}</span>
           </button>
-        ) : (
+        ) : !hasStarted || isClockedIn ? (
           <div className="flex min-h-14 flex-col items-center justify-center rounded-xl bg-primary-well px-4 py-2 text-center">
             <p className="flex items-center gap-2 text-base font-bold tabular-nums">
               <Timer aria-hidden className="size-4.5" />
               {isClockedIn ? "You’re clocked in" : `Starts in ${formatCountdown(shift.startTime)}`}
             </p>
-            {!isClockedIn && <p className="text-xs tabular-nums">Clock in opens at {formatTime(new Date(opensAt).toISOString())}</p>}
+            {!isClockedIn && features.timesheet && <p className="text-xs tabular-nums">Clock in opens at {formatTime(new Date(opensAt).toISOString())}</p>}
           </div>
-        )}
+        ) : null}
 
         {/* Sick, called off…: marked here so the card moves on to the next shift */}
         {!isClockedIn && (
@@ -384,7 +387,8 @@ export function HomePage() {
   const isWide = useIsWide();
   const savedView = usePreference("homeView");
   const view = isWide ? savedView : "week";
-  const showShared = usePreference("sharedOnHome") === "on";
+  const features = featuresOf(user);
+  const showShared = features.sharedOnHome;
   const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
 
   const monthStart = new Date(selected.getFullYear(), selected.getMonth(), 1);
@@ -405,6 +409,9 @@ export function HomePage() {
   const recent = useFetch(() => getMyShifts({ from: new Date(Date.now() - RECENT_DAYS * DAY_MS).toISOString(), to: new Date().toISOString() }));
   const current = useFetch(getCurrentEntry);
   const conflicts = useFetch(() => getConflicts().catch(() => null));
+  // Finished shifts nobody clocked ("Add your hours?"). Re-asked when the features change:
+  // "Always add my hours" empties it on the backend.
+  const unlogged = useFetch(() => (features.timesheet ? getUnloggedShifts().catch(() => []) : Promise.resolve([])), [features.timesheet, features.autoHours]);
 
   const jobs = useMyJobs();
   const welcomeSeen = usePreference("welcomeSeen");
@@ -423,8 +430,12 @@ export function HomePage() {
     upcoming.refetch();
     recent.refetch();
     conflicts.refetch();
+    unlogged.refetch();
   });
-  useTimesheetChanged(current.refetch);
+  useTimesheetChanged(() => {
+    current.refetch();
+    unlogged.refetch();
+  });
 
   // Missed shifts never make the card: the user isn't going
   const next = upcoming.data?.find((shift) => !shift.missedReason && Date.parse(shift.endTime) > now) ?? null;
@@ -434,11 +445,12 @@ export function HomePage() {
   const progress = {
     hasJob: !!jobs.data?.length,
     hasShift: !!(upcoming.data?.length || recent.data?.length || week.data?.length),
-    hasHome: !!user.homeLocation,
-    hasClockedIn: !!current.data || !!recent.data?.some((shift) => shift.timeEntries?.length),
+    // Steps for a feature that's switched off are left out (undefined)
+    hasHome: features.leaveBy ? !!user.homeLocation : undefined,
+    hasClockedIn: features.timesheet ? !!current.data || !!recent.data?.some((shift) => shift.timeEntries?.length) : undefined,
   };
   // Waits for everything it reads, so the card never appears and then vanishes
-  const showGuide = guidePreference === "shown" && !Object.values(progress).every(Boolean) && jobs.data !== null && upcoming.data !== null && recent.data !== null;
+  const showGuide = guidePreference === "shown" && !Object.values(progress).every((done) => done !== false) && jobs.data !== null && upcoming.data !== null && recent.data !== null;
 
   const dayStart = selected.getTime();
   const dayEnd = addDays(selected, 1).getTime();
@@ -608,6 +620,8 @@ export function HomePage() {
         {/* A phone keeps one column for what matters most: the day strip and "Coming up" below already name everyone's shifts */}
         <TodayCard people={todayPeople} now={now} className="max-md:hidden" />
       </div>
+
+      {!!unlogged.data?.length && <UnloggedHoursCard items={unlogged.data} now={now} />}
 
       <Issues issues={issues} now={now} className="mb-7" />
 

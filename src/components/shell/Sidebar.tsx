@@ -7,7 +7,8 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useLogOut, useUser } from "@/lib/session";
 import { openNewShift } from "@/lib/sheets";
 import { Kbd } from "../ui/Button";
-import { isActive, SETTINGS, SIDEBAR_GROUPS, type NavItem } from "./nav";
+import { featuresOf } from "@/lib/features";
+import { isActive, isShown, SETTINGS, SIDEBAR_GROUPS, type NavItem } from "./nav";
 
 const initials = (name: string) =>
   name
@@ -123,6 +124,7 @@ function AccountMenu() {
  */
 export function Sidebar({ onSearch }: { onSearch: () => void }) {
   const pathname = usePathname();
+  const features = featuresOf(useUser());
   // Only ever rendered in the browser (the shell waits for the session), so the platform is known
   const searchKey = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl K";
 
@@ -183,7 +185,7 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
         {SIDEBAR_GROUPS.map((group) => (
           <div key={group.label} className="flex flex-col gap-0.5">
             <p className="mb-1 hidden px-2 text-2xs font-semibold text-muted-foreground lg:block">{group.label}</p>
-            {group.items.map(link)}
+            {group.items.filter(isShown(features)).map(link)}
           </div>
         ))}
       </nav>

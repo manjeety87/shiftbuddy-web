@@ -22,7 +22,8 @@ export type SheetRequest =
   | { kind: "paySummary" }
   | { kind: "themes" }
   | { kind: "customTheme" }
-  | { kind: "welcome" }
+  | { kind: "welcome"; replay?: boolean }
+  | { kind: "arrival" }
   | { kind: "shared"; ownerId: string; ownerName: string; date?: Date }
   | { kind: "verifyEmail" }
   | { kind: "password" }

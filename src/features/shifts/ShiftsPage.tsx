@@ -24,6 +24,8 @@ import { useTimesheetChanged } from "@/lib/timesheet";
 import { useFetch } from "@/lib/useFetch";
 import { useEscapeToStop, useLongPress } from "@/lib/useLongPress";
 import { useNow } from "@/lib/useNow";
+import { featuresOf } from "@/lib/features";
+import { useUser } from "@/lib/session";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const PAST_DAYS = 90;
@@ -62,6 +64,7 @@ const workedText = (shift: Shift) => {
 
 export function ShiftsPage() {
   const now = useNow();
+  const features = featuresOf(useUser());
   const [view, setView] = useState<View>("upcoming");
   const [jobId, setJobId] = useState("all");
   // Several shifts at once, to clear a week copied by mistake, say
@@ -163,9 +166,11 @@ export function ShiftsPage() {
           title="Shifts"
           actions={
             <>
-              <Button variant="secondary" aria-label="Pay summary" icon={<DollarSign aria-hidden className="size-4" />} onClick={() => openSheet({ kind: "paySummary" })}>
-                <span className="hidden sm:inline">Pay</span>
-              </Button>
+              {features.pay && (
+                <Button variant="secondary" aria-label="Pay summary" icon={<DollarSign aria-hidden className="size-4" />} onClick={() => openSheet({ kind: "paySummary" })}>
+                  <span className="hidden sm:inline">Pay</span>
+                </Button>
+              )}
               {shown.length > 0 && <SelectButton onClick={() => setSelecting(true)} />}
               {/* The empty state below already offers Scan and Add; no need to say it twice */}
               {!showsEmptyState && (
@@ -253,7 +258,7 @@ export function ShiftsPage() {
             <span>Job</span>
             <span>Time</span>
             <span className="text-right">Length</span>
-            <span>{view === "past" ? "Hours worked" : view === "missed" ? "Note" : "Notes"}</span>
+            <span>{view === "past" && features.timesheet ? "Hours worked" : view === "missed" ? "Note" : "Notes"}</span>
             <span />
           </div>
 
@@ -269,9 +274,9 @@ export function ShiftsPage() {
                   const day = formatDayLabel(new Date(shift.startTime), new Date(now));
                   const startsDay = index === 0 || toCalendarDateString(group.shifts[index - 1].startTime) !== toCalendarDateString(shift.startTime);
                   const role = jobRole(shift.job);
-                  const worked = view === "past" ? workedText(shift) : null;
+                  const worked = view === "past" && features.timesheet ? workedText(shift) : null;
                   const missed = shift.missedReason;
-                  const aside = missed ? shift.missedNote : (worked?.text ?? (view === "upcoming" ? shift.notes : null));
+                  const aside = missed ? shift.missedNote : (worked?.text ?? (view === "upcoming" || !features.timesheet ? shift.notes : null));
                   const isPicked = picked.has(shift.id);
                   return (
                     <li key={shift.id}>

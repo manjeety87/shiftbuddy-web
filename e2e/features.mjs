@@ -58,6 +58,8 @@ const api = async (method, path, data) => {
 try {
   // Registering with the cookie transport leaves the refresh cookie in this browser: the page opens signed in
   token = (await api("post", "/auth/register", { name: "Feature Tester", email, password: "Testing123" })).accessToken;
+  // A new account starts with the timesheet and pay estimates off; these checks need them
+  await api("patch", "/auth/profile", { features: { timesheet: true, pay: true } });
   await api("put", "/auth/home", { address: "100 Queen St W, Toronto", latitude: 43.6534, longitude: -79.3841 });
   const near = await api("post", "/jobs", { title: "Sales Associate", companyName: "Boathouse", hourlyRate: 18, latitude: 43.7254, longitude: -79.4522, location: "Yorkdale Mall, Toronto" });
   const far = await api("post", "/jobs", { title: "Cashier", companyName: "Fairweather", latitude: 43.7765, longitude: -79.2578, location: "Scarborough Town Centre, Toronto" });
@@ -65,6 +67,7 @@ try {
   await api("post", "/shifts", { jobId: near.id, startTime: at(-30), endTime: at(-24) }); // finished yesterday
   const first = await api("post", "/shifts", { jobId: near.id, startTime: at(48), endTime: at(52) });
   await api("post", "/shifts", { jobId: far.id, startTime: at(51), endTime: at(55), allowOverlap: true }); // overlaps `first`
+  await api("post", "/shifts", { jobId: far.id, startTime: at(-54), endTime: at(-50) }); // finished, never clocked: "Add your hours?"
 
   await step("home: clock in, then clock out with the hours in the toast", async () => {
     await page.goto(`${BASE}/home`);
@@ -99,6 +102,44 @@ try {
     await closed();
     await ui.getByText(/5h 30m paid/).waitFor();
     await shot("f3-past-shifts");
+  });
+
+  await step("home: “Add your hours?” saves a shift nobody clocked", async () => {
+    await page.goto(`${BASE}/home`);
+    await ui.getByText("Add your hours?").waitFor();
+    await shot("f3a-unlogged");
+    await ui.getByRole("button", { name: /^Add 4h at Fairweather/ }).click();
+    await ui.getByText("Added 4h at Fairweather").waitFor();
+    await ui.getByText("Add your hours?").waitFor({ state: "detached" });
+  });
+
+  await step("features: switching off pay estimates takes Pay off Shifts", async () => {
+    await page.goto(`${BASE}/settings#features`);
+    const pay = ui.getByRole("switch", { name: "Pay estimates" });
+    await pay.click();
+    await page.waitForFunction(() => document.querySelector('[role=switch][aria-label="Pay estimates"]')?.getAttribute("aria-checked") === "false");
+    await shot("f3c-features");
+    await page.goto(`${BASE}/shifts`);
+    await ui.getByRole("heading", { name: "Shifts" }).waitFor();
+    if (await ui.getByRole("button", { name: "Pay summary" }).count()) throw new Error("Pay is still on Shifts with pay estimates off");
+    await page.goto(`${BASE}/settings#features`);
+    await ui.getByRole("switch", { name: "Pay estimates" }).click();
+    await page.waitForFunction(() => document.querySelector('[role=switch][aria-label="Pay estimates"]')?.getAttribute("aria-checked") === "true");
+  });
+
+  await step("arrive early: Custom opens the minutes wheel; Set saves it", async () => {
+    await page.goto(`${BASE}/settings#commute`);
+    // Custom opens the wheel; the choice only changes once Set saves it, so this is a click, not a check
+    await ui.getByRole("radio", { name: "Custom" }).click({ force: true });
+    const wheel = sheet().getByRole("spinbutton", { name: "Minutes early" });
+    await wheel.focus();
+    for (let i = 0; i < 3; i++) await page.keyboard.press("ArrowDown");
+    await page.waitForFunction(() => document.querySelector('[role=spinbutton]')?.getAttribute("aria-valuenow") === "13");
+    await sheet().getByText("For a 10:00 AM shift you’ll be there by 9:47 AM.").waitFor();
+    await shot("f3d-arrival-wheel");
+    await sheet().getByRole("button", { name: "Set" }).click();
+    await ui.getByText("You’ll arrive 13 min early").waitFor();
+    await ui.getByRole("radio", { name: "13 min" }).waitFor({ state: "attached" });
   });
 
   await step("home: “Can’t make it?” on the next-shift card opens the missed-shift panel", async () => {

@@ -13,6 +13,8 @@ export interface TimeEntry {
     clockIn: string;
     clockOut: string | null; // null = still on the clock
     breakMinutes: number; // unpaid
+    /** Added from the schedule by "Add my hours for me"; false once changed */
+    isAutomatic?: boolean;
     job: Job;
 }
 
@@ -51,6 +53,15 @@ export const createTimeEntry = async (entry: ({ jobId: string } | { shiftId: str
     timesheetChanged.emit();
     return data.data;
 };
+
+/** A finished shift nobody clocked, with the hours it would have if it went to plan. */
+export interface UnloggedShift {
+    shift: { id: string; startTime: string; endTime: string; job: TimesheetJob };
+    suggested: { clockIn: string; clockOut: string; breakMinutes: number; paidMinutes: number };
+}
+
+/** "Add your hours?" — empty while the timesheet is off or hours are added automatically (the backend decides). */
+export const getUnloggedShifts = async (): Promise<UnloggedShift[]> => (await api.get<{ data: UnloggedShift[] }>('/timesheet/unlogged')).data.data;
 
 type TimesheetJob = Timesheet['job'];
 

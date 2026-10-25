@@ -1,7 +1,9 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { featuresOf } from "@/lib/features";
 import { formatMoney } from "@/lib/inputs";
+import { useUser } from "@/lib/session";
 import { useShiftsChanged } from "@/lib/shiftEvents";
 import { getShiftsSummary } from "@/lib/shifts";
 import { useFetch } from "@/lib/useFetch";
@@ -20,10 +22,12 @@ const formatHours = (hours: number) => `${Math.round(hours * 10) / 10}h`;
 export function PeriodSummary({ from, to, title, showBreakdown = true, action }: { from: Date; to: Date; title: string; showBreakdown?: boolean; action?: ReactNode }) {
   const { data, refetch } = useFetch(() => getShiftsSummary({ from: from.toISOString(), to: to.toISOString() }), [from.getTime(), to.getTime()]);
   useShiftsChanged(refetch);
+  const showPay = featuresOf(useUser()).pay;
   if (!data || (data.shiftCount === 0 && !action)) return null;
 
   const mostHours = Math.max(...data.byJob.map((job) => job.hours), 1);
-  const hasPay = data.totalGrossPay > 0;
+  // Pay estimates switched off (Settings › Features): the card is shifts and hours only
+  const hasPay = showPay && data.totalGrossPay > 0;
 
   return (
     <section aria-label={title} className="flex flex-col">
@@ -35,7 +39,7 @@ export function PeriodSummary({ from, to, title, showBreakdown = true, action }:
         <p className="surface p-4 text-sm text-muted-foreground">No shifts in this period yet.</p>
       ) : (
         <div className="surface flex-1 p-4">
-          <dl className="grid grid-cols-[auto_auto_minmax(0,1fr)] gap-x-5">
+          <dl className={`grid gap-x-5 ${showPay ? "grid-cols-[auto_auto_minmax(0,1fr)]" : "grid-cols-[auto_auto]"}`}>
             <div>
               <dt className="text-xs text-muted-foreground">Shifts</dt>
               <dd className="text-xl font-semibold tabular-nums">{data.shiftCount}</dd>
@@ -44,19 +48,21 @@ export function PeriodSummary({ from, to, title, showBreakdown = true, action }:
               <dt className="text-xs text-muted-foreground">Hours</dt>
               <dd className="text-xl font-semibold tabular-nums">{formatHours(data.totalHours)}</dd>
             </div>
-            <div className="min-w-0">
-              <dt className="text-xs text-muted-foreground">Est. pay</dt>
-              <dd className="truncate text-xl font-semibold tabular-nums">{hasPay ? formatMoney(data.totalGrossPay) : "—"}</dd>
-            </div>
+            {showPay && (
+              <div className="min-w-0">
+                <dt className="text-xs text-muted-foreground">Est. pay</dt>
+                <dd className="truncate text-xl font-semibold tabular-nums">{hasPay ? formatMoney(data.totalGrossPay) : "—"}</dd>
+              </div>
+            )}
           </dl>
           {showBreakdown ? (
             <p className="mt-2 text-xs text-pretty text-muted-foreground tabular-nums">
               {formatHours(data.completedHours)} worked · {formatHours(data.upcomingHours)} still to come
               {hasPay && data.taxDeductionPercent > 0 && ` · about ${formatMoney(data.totalNetPay)} after ${data.taxDeductionPercent}% deductions`}
-              {!hasPay && " · add an hourly rate to a job to see pay"}
+              {showPay && !hasPay && " · add an hourly rate to a job to see pay"}
             </p>
           ) : (
-            !hasPay && <p className="mt-2 text-xs text-pretty text-muted-foreground">Add an hourly rate to a job to see pay.</p>
+            showPay && !hasPay && <p className="mt-2 text-xs text-pretty text-muted-foreground">Add an hourly rate to a job to see pay.</p>
           )}
 
           {data.byJob.length > 1 && (

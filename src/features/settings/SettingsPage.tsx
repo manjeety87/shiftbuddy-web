@@ -3,6 +3,7 @@
 import { BadgeCheck, ChevronRight, ClipboardList, FolderDown, House, LayoutDashboard, LogOut, MailWarning, Palette, Percent, ShieldCheck, User as UserIcon, Users, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useState, useSyncExternalStore, type FormEvent, type ReactNode } from "react";
+import { CoreFeatures, FeatureSwitches } from "@/components/FeatureSwitches";
 import { ThemePicker } from "@/components/theme/ThemePicker";
 import { Button } from "@/components/ui/Button";
 import { inputClass } from "@/components/ui/Field";
@@ -11,7 +12,8 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Switch } from "@/components/ui/Switch";
 import { errorMessage } from "@/lib/api";
 import { sendVerificationCode, updateProfile } from "@/lib/auth";
-import { ARRIVAL_BUFFER_MAX_MINUTES, ARRIVAL_BUFFER_OPTIONS, arrivalBufferChoice, describeArriveByExample, type ArrivalBufferChoice } from "@/lib/commute";
+import { ARRIVAL_BUFFER_OPTIONS, arrivalBufferChoice, describeArriveByExample, type ArrivalBufferChoice } from "@/lib/commute";
+import { CALENDAR_FEATURES, EXTRA_FEATURES, featuresOf } from "@/lib/features";
 import { splitAddress } from "@/lib/geocode";
 import { notify } from "@/lib/notify";
 import { setPreference, useIsWide, usePreference } from "@/lib/preferences";
@@ -28,10 +30,11 @@ const COMMUTE_MODES = [
 // `label` names the section on a wide screen; `screen` is its name on a phone, the same
 // words as its row in the menu and its title once open (as the phone app's Settings)
 const SECTIONS = [
+  // First: what the app can do is what people ask about most
+  { id: "features", label: "Features", screen: "Features" },
   { id: "profile", label: "Profile", screen: "Edit Profile" },
   { id: "commute", label: "Home & commute", screen: "Home & Commute" },
   { id: "pay", label: "Pay estimates", screen: "Tax Deduction" },
-  { id: "customize", label: "Customize", screen: "Customize" },
   { id: "appearance", label: "Appearance", screen: "Appearance" },
   { id: "security", label: "Password & security", screen: "Password & Security" },
   { id: "data", label: "Your data", screen: "Your Data" },
@@ -139,13 +142,12 @@ export function SettingsPage() {
   const logOut = useLogOut();
   const [name, setName] = useState(user.name);
   const [tax, setTax] = useState(String(user.taxDeductionPercent));
-  const [saving, setSaving] = useState<"name" | "tax" | "arrival" | "download" | null>(null);
-  // Custom stays picked while its minutes are typed; they save with Save, like the other typed fields
-  const [isCustomArrival, setIsCustomArrival] = useState(arrivalBufferChoice(user.arrivalBufferMinutes) === "custom");
-  const [arrival, setArrival] = useState(isCustomArrival ? String(user.arrivalBufferMinutes) : "");
-  const showShared = usePreference("sharedOnHome") === "on";
+  const [saving, setSaving] = useState<"name" | "tax" | "download" | null>(null);
   const showGuide = usePreference("gettingStarted") === "shown";
-  const showCalendarSummary = usePreference("calendarSummary") === "on";
+  const features = featuresOf(user);
+  const isCustomArrival = arrivalBufferChoice(user.arrivalBufferMinutes) === "custom";
+  // A custom time names itself on its segment ("7 min"); otherwise the segment says Custom
+  const arrivalOptions = ARRIVAL_BUFFER_OPTIONS.map((option) => (option.value === "custom" && isCustomArrival ? { ...option, label: `${user.arrivalBufferMinutes} min` } : option));
   const open = useOpenSection();
   const isWide = useIsWide();
 
@@ -158,7 +160,7 @@ export function SettingsPage() {
   // Settings apply as they're chosen; only free text needs a Save. The choice shows
   // at once (a control that waits for the server feels broken) and goes back if the save fails.
   const apply = async (changes: Parameters<typeof updateProfile>[0], done?: string) => {
-    setUser({ ...user, ...changes });
+    setUser({ ...user, ...changes, features: { ...user.features, ...changes.features } });
     try {
       setUser(await updateProfile(changes));
       if (done) notify.success(done);
@@ -184,17 +186,10 @@ export function SettingsPage() {
     setSaving(null);
   };
 
+  // Custom opens the minutes wheel; the quick picks save at once
   const chooseArrival = (choice: ArrivalBufferChoice) => {
-    setIsCustomArrival(choice === "custom");
-    if (choice !== "custom") apply({ arrivalBufferMinutes: Number(choice) });
-  };
-  const arrivalValue = Number(arrival);
-  const arrivalError = /^\d+$/.test(arrival) && arrivalValue <= ARRIVAL_BUFFER_MAX_MINUTES ? null : `Enter whole minutes, 0 to ${ARRIVAL_BUFFER_MAX_MINUTES}`;
-  const saveArrival = async (event: FormEvent) => {
-    event.preventDefault();
-    setSaving("arrival");
-    await apply({ arrivalBufferMinutes: arrivalValue }, "Arrival time saved");
-    setSaving(null);
+    if (choice === "custom") openSheet({ kind: "arrival" });
+    else apply({ arrivalBufferMinutes: Number(choice) });
   };
 
   const verify = async () => {
@@ -239,13 +234,13 @@ export function SettingsPage() {
           </div>
 
           <nav aria-label="Settings" className="surface mb-5 divide-y divide-border overflow-hidden">
+            <MenuRow icon={LayoutDashboard} label={screenName("features")} href="#features" />
             <MenuRow icon={UserIcon} label={screenName("profile")} href="#profile" />
             <MenuRow icon={House} label={screenName("commute")} href="#commute" />
-            <MenuRow icon={ClipboardList} label="Timesheet" href="/timesheet" />
+            {features.timesheet && <MenuRow icon={ClipboardList} label="Timesheet" href="/timesheet" />}
             <MenuRow icon={Users} label="Sharing" href="/sharing" />
             <MenuRow icon={Palette} label={screenName("appearance")} href="#appearance" />
-            <MenuRow icon={Percent} label={screenName("pay")} detail={`${user.taxDeductionPercent}%`} href="#pay" />
-            <MenuRow icon={LayoutDashboard} label={screenName("customize")} href="#customize" />
+            {features.pay && <MenuRow icon={Percent} label={screenName("pay")} detail={`${user.taxDeductionPercent}%`} href="#pay" />}
             <MenuRow icon={ShieldCheck} label={screenName("security")} href="#security" />
             <MenuRow icon={FolderDown} label={screenName("data")} href="#data" />
           </nav>
@@ -260,7 +255,7 @@ export function SettingsPage() {
       <div className="grid items-start gap-10 lg:grid-cols-[11rem_minmax(0,44rem)]">
         {/* With room, the sections are listed beside the page; a phone just scrolls */}
         <nav aria-label="Settings sections" className="sticky top-24 hidden flex-col gap-0.5 lg:flex">
-          {SECTIONS.map((section) => (
+          {SECTIONS.filter((section) => section.id !== "pay" || features.pay).map((section) => (
             <a key={section.id} href={`#${section.id}`} className="flex h-8 items-center rounded-lg px-2.5 text-sm font-medium text-muted-foreground row-hover pointer-fine:hover:text-foreground">
               {section.label}
             </a>
@@ -268,6 +263,24 @@ export function SettingsPage() {
         </nav>
 
         <div className="min-w-0">
+          <Section id="features" title="Features" open={open} description="Your shifts and jobs are always here. Switch on the extras you need — on the web and on your phone.">
+            <GroupLabel>Always on</GroupLabel>
+            <CoreFeatures />
+            <GroupLabel>Extras</GroupLabel>
+            <FeatureSwitches items={EXTRA_FEATURES} />
+            <GroupLabel>Calendar</GroupLabel>
+            <FeatureSwitches items={CALENDAR_FEATURES} />
+            <GroupLabel>Help</GroupLabel>
+            <Setting label="Getting started guide" help="The setup checklist on Home. Saved on this browser.">
+              <Switch label="Show the getting started guide on Home" checked={showGuide} onChange={(checked) => setPreference("gettingStarted", checked ? "shown" : "hidden")} />
+            </Setting>
+            <Setting label="Welcome tour" help="The short tour a new account sees, with the extras at the end.">
+              <Button variant="secondary" onClick={() => openSheet({ kind: "welcome", replay: true })}>
+                Show Tour
+              </Button>
+            </Setting>
+          </Section>
+
           <Section id="profile" title="Profile" open={open}>
             <form onSubmit={saveName}>
               <Setting label="Name" htmlFor="settings-name" help="Shown to people you share your schedule with.">
@@ -300,71 +313,50 @@ export function SettingsPage() {
             <Setting label="I usually get to work by">
               <SegmentedControl label="How you get to work" options={COMMUTE_MODES} value={user.commuteMode} onChange={(commuteMode) => apply({ commuteMode })} className="w-full sm:w-48" />
             </Setting>
-            <Setting
-              label="I like to arrive"
-              help={`Leave-by times and routes are planned to get you there this early.${user.arrivalBufferMinutes > 0 ? ` ${describeArriveByExample(user.arrivalBufferMinutes)}` : ""}`}
-            >
-              <SegmentedControl
-                label="How early you like to arrive"
-                options={ARRIVAL_BUFFER_OPTIONS}
-                value={isCustomArrival ? "custom" : arrivalBufferChoice(user.arrivalBufferMinutes)}
-                onChange={chooseArrival}
-                className="w-full sm:w-96"
-              />
-            </Setting>
-            {isCustomArrival && (
-              <form onSubmit={saveArrival}>
-                <Setting label="Minutes early" htmlFor="settings-arrival" help={arrival !== "" && arrivalError ? <span className="text-destructive">{arrivalError}</span> : "Any number, like 7 or 25."}>
+            {/* Only with leave-by times switched on: nothing else uses it */}
+            {features.leaveBy && (
+              <Setting
+                label="I like to arrive"
+                help={
+                  <>
+                    Leave-by times and routes are planned to get you there this early.{user.arrivalBufferMinutes > 0 && ` ${describeArriveByExample(user.arrivalBufferMinutes)}`}
+                    {/* The selected segment can't be clicked again, so a custom time is changed here */}
+                    {isCustomArrival && (
+                      <>
+                        {" "}
+                        <button type="button" onClick={() => openSheet({ kind: "arrival" })} className="font-medium text-primary pointer-fine:hover:underline">
+                          Change
+                        </button>
+                      </>
+                    )}
+                  </>
+                }
+              >
+                <SegmentedControl label="How early you like to arrive" options={arrivalOptions} value={arrivalBufferChoice(user.arrivalBufferMinutes)} onChange={chooseArrival} className="w-full sm:w-96" />
+              </Setting>
+            )}
+          </Section>
+
+          {features.pay && (
+            <Section id="pay" title="Pay estimates" open={open}>
+              <form onSubmit={saveTax}>
+                <Setting label="Deductions (%)" htmlFor="settings-tax" help={taxError ? <span className="text-destructive">{taxError}</span> : "Taken off estimated pay to show roughly what lands in your account."}>
                   <input
-                    id="settings-arrival"
-                    inputMode="numeric"
-                    maxLength={3}
-                    placeholder="7"
-                    autoFocus={arrival === ""}
-                    aria-invalid={arrival !== "" && arrivalError ? true : undefined}
-                    value={arrival}
-                    onChange={(event) => setArrival(event.target.value.replace(/[^0-9]/g, ""))}
+                    id="settings-tax"
+                    inputMode="decimal"
+                    aria-invalid={taxError ? true : undefined}
+                    value={tax}
+                    onChange={(event) => setTax(event.target.value.replace(/[^0-9.]/g, ""))}
                     className={`${inputClass} text-right tabular-nums sm:w-24`}
                   />
-                  <Button type="submit" variant="secondary" busy={saving === "arrival"} disabled={!!arrivalError || arrivalValue === user.arrivalBufferMinutes}>
+                  <Button type="submit" variant="secondary" busy={saving === "tax"} disabled={!!taxError || taxValue === user.taxDeductionPercent}>
                     Save
                   </Button>
                 </Setting>
               </form>
-            )}
-          </Section>
+            </Section>
 
-          <Section id="pay" title="Pay estimates" open={open}>
-            <form onSubmit={saveTax}>
-              <Setting label="Deductions (%)" htmlFor="settings-tax" help={taxError ? <span className="text-destructive">{taxError}</span> : "Taken off estimated pay to show roughly what lands in your account."}>
-                <input
-                  id="settings-tax"
-                  inputMode="decimal"
-                  aria-invalid={taxError ? true : undefined}
-                  value={tax}
-                  onChange={(event) => setTax(event.target.value.replace(/[^0-9.]/g, ""))}
-                  className={`${inputClass} text-right tabular-nums sm:w-24`}
-                />
-                <Button type="submit" variant="secondary" busy={saving === "tax"} disabled={!!taxError || taxValue === user.taxDeductionPercent}>
-                  Save
-                </Button>
-              </Setting>
-            </form>
-          </Section>
-
-          <Section id="customize" title="Customize" open={open} description="Choose what your pages show. Saved on this browser.">
-            <GroupLabel>Home</GroupLabel>
-            <Setting label="Schedules shared with me" help="Shifts from people who share their schedule with you, next to your own on Home’s calendar. Off: only yours — theirs stay under Sharing.">
-              <Switch label="Show schedules shared with me on Home" checked={showShared} onChange={(checked) => setPreference("sharedOnHome", checked ? "on" : "off")} />
-            </Setting>
-            <Setting label="Getting started guide" help="The checklist on Home for setting up: a job, your shifts, your home address, your first clock-in. It goes away by itself once everything is done.">
-              <Switch label="Show the getting started guide on Home" checked={showGuide} onChange={(checked) => setPreference("gettingStarted", checked ? "shown" : "hidden")} />
-            </Setting>
-            <GroupLabel>Calendar</GroupLabel>
-            <Setting label="Hours & pay card" help="Below the calendar: shifts, hours and estimated pay for the week or month you’re looking at.">
-              <Switch label="Show the hours and pay card on Calendar" checked={showCalendarSummary} onChange={(checked) => setPreference("calendarSummary", checked ? "on" : "off")} />
-            </Setting>
-          </Section>
+          )}
 
           <Section id="appearance" title="Appearance" open={open} description="Pick to preview it on the whole page; Save keeps it, on this browser.">
             <div className="p-4">

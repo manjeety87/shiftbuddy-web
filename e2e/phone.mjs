@@ -120,6 +120,8 @@ try {
 
   // A week with something in every part of the app: on the clock now, a clash, hours worked, someone sharing
   token = (await api("post", "/auth/register", { name: "Phone Tester With A Fairly Long Name", email, password: "Testing123" })).accessToken;
+  // A new account starts with the timesheet and pay estimates off; these screens show them
+  await api("patch", "/auth/profile", { features: { timesheet: true, pay: true } });
   await context.addCookies([{ name: "sb_signed_in", value: "1", url: BASE }]);
 
   // A brand-new account: the welcome slides once, then Home's "Getting started" card
@@ -280,7 +282,7 @@ try {
     await page.waitForTimeout(400);
     await tappable(page.getByRole("link", { name: "Password & Security" })).click();
     await page.waitForURL("**/settings#security");
-    await page.getByText("This device").waitFor();
+    await page.getByText("This device", { exact: true }).waitFor(); // the badge — Appearance also says "follows this device"
     await look("password & security", { whole: true });
     await panel("password", () => tappable(page.getByRole("button", { name: "Change Password" })).click());
     await page.keyboard.press("Escape");
