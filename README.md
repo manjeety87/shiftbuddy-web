@@ -76,6 +76,15 @@ An empty future day of yours is one big "add a shift" button; a day that has shi
 preferences (`lib/preferences.ts`: `homeView`, `sharedOnHome`); Settings → Home page
 turns the shared schedules off; the same switch is on Sharing, under "Shared with you".
 
+**The assistant** (`features/assistant/`, Ctrl/⌘ J, the sidebar's Assistant, the mic button
+above the tabs on a phone). The browser turns speech into text (Web Speech API: Chrome, Edge,
+Safari; Firefox can only type) and reads replies aloud; `POST /assistant/messages` does the
+rest with Gemini. Anything that saves comes back as a card and waits for a yes — spoken
+("haan, add kardo") or the card's button (`POST /assistant/confirm`). The conversation is kept
+in memory in `Assistant.tsx` and sent with each turn. While a shift's panel is open the assistant
+lives inside that `<dialog>` (a modal dialog makes everything outside it inert) and shrinks to a
+pill at the top. Listening pauses while it thinks and speaks, so it never hears itself.
+
 **Designed for the web, not a stretched phone app.** The sidebar, Ctrl/⌘ K search
 (`CommandPalette`), tables (Shifts, Timesheet), the week board on Home and the
 month grid with shift names all exist only from 768px up; below that the same
@@ -128,6 +137,10 @@ carry their own tracking and leading (`@theme` in `globals.css`); controls are
   `components/ui` — "Thu, Oct 8" and "5:30 PM" everywhere, in the device's time zone.
   The month grid is `react-day-picker`; the time list is ours. Both float in `Popover`
   (the browser's popover, so it sits above an open dialog) on the `glass` material.
+- The assistant only asks the backend and acts on its answer (`actions`: open a page, a shift,
+  a panel). It never saves anything itself: a card's Save and a spoken yes both go through the
+  backend. A new page or panel it should open: add it to `ASSISTANT_PAGES` / `ASSISTANT_PANELS`
+  in the backend and to `runAction` in `Assistant.tsx`.
 - A panel's main button is the `action` prop (it lands in the footer), not a button
   in the content. Disable it until the data it needs has loaded.
 
@@ -146,8 +159,11 @@ npm run build && npx next start -p 3210
 npm run test:e2e        # in another terminal
 ```
 
+`e2e/assistant.mjs` stands in for the speech service and scripts Gemini's answers (so it
+doesn't use up the free quota); `AI_LIVE=1 node e2e/assistant.mjs` talks to the real Gemini.
+
 They create `@test.local` accounts and delete them afterwards. The backend allows
-20 sign-in attempts per 15 minutes per address, and the four suites together sign in
+20 sign-in attempts per 15 minutes per address, and the suites together sign in
 more than that from one machine: run the backend with `RATE_LIMIT_SCALE=10` in its
 `.env` (ignored in production), or the last suite starts logged out with a 429.
 

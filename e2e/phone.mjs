@@ -204,6 +204,14 @@ try {
     await look("calendar day picked", { whole: true });
   });
 
+  await step("assistant", async () => {
+    await open("home");
+    await tappable(page.getByRole("button", { name: "Assistant" })).click();
+    await page.getByRole("region", { name: "Assistant" }).waitFor();
+    await look("assistant");
+    await tappable(page.getByRole("button", { name: "Close the assistant" })).click();
+  });
+
   // Every panel
   await step("panel new shift", async () => {
     await open("home");

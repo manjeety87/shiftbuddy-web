@@ -137,6 +137,13 @@ try {
     await page.locator("dialog[open]").waitFor();
     for (const size of SIZES) await look(label, size);
   }
+  // The assistant floats beside the page instead of being a dialog; opened the way a keyboard does
+  if (wanted("home") || wanted("panels")) {
+    await open("home");
+    await page.keyboard.press("Control+j");
+    await page.getByRole("region", { name: "Assistant" }).waitFor();
+    for (const size of SIZES) await look("assistant", size);
+  }
 } finally {
   if (token) {
     // Hidden at once, erased by the backend after its 30-day grace period

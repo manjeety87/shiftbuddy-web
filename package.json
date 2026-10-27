@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "node e2e/smoke.mjs && node e2e/features.mjs && node e2e/layout.mjs && node e2e/phone.mjs"
+    "test:e2e": "node e2e/smoke.mjs && node e2e/features.mjs && node e2e/layout.mjs && node e2e/phone.mjs && node e2e/assistant.mjs"
   },
   "dependencies": {
     "leaflet": "^1.9.4",

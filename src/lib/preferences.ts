@@ -13,6 +13,10 @@ const DEFAULTS = {
   welcomeSeen: "no" as "no" | "yes",
   /** Home's "Getting started" checklist, until it's done or hidden */
   gettingStarted: "shown" as "shown" | "hidden",
+  /** What the assistant listens for: English, or Hindi (which also hears the English words in it) */
+  assistantLanguage: "en-IN" as "en-IN" | "hi-IN",
+  /** Whether the assistant reads its replies aloud */
+  assistantVoice: "on" as "on" | "off",
 };
 
 type Preferences = typeof DEFAULTS;
@@ -28,6 +32,8 @@ const read = <K extends Key>(key: K): Preferences[K] => {
     if (key === "homeView" && (saved === "week" || saved === "month")) return saved as Preferences[K];
     if (key === "welcomeSeen" && (saved === "no" || saved === "yes")) return saved as Preferences[K];
     if (key === "gettingStarted" && (saved === "shown" || saved === "hidden")) return saved as Preferences[K];
+    if (key === "assistantLanguage" && (saved === "en-IN" || saved === "hi-IN")) return saved as Preferences[K];
+    if (key === "assistantVoice" && (saved === "on" || saved === "off")) return saved as Preferences[K];
   } catch {
     // Storage blocked (private window): the defaults apply
   }

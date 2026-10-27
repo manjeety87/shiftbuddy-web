@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronsUpDown, LogOut, Plus, Search, Settings } from "lucide-react";
+import { ChevronsUpDown, LogOut, Mic, Plus, Search, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
@@ -8,6 +8,7 @@ import { useLogOut, useUser } from "@/lib/session";
 import { openNewShift } from "@/lib/sheets";
 import { Kbd } from "../ui/Button";
 import { featuresOf } from "@/lib/features";
+import { toggleAssistant } from "@/features/assistant/assistantOpen";
 import { isActive, isShown, SETTINGS, SIDEBAR_GROUPS, type NavItem } from "./nav";
 
 const initials = (name: string) =>
@@ -126,7 +127,8 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
   const pathname = usePathname();
   const features = featuresOf(useUser());
   // Only ever rendered in the browser (the shell waits for the session), so the platform is known
-  const searchKey = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl K";
+  const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+  const searchKey = isMac ? "⌘K" : "Ctrl K";
 
   const link = ({ href, label, icon: Icon }: NavItem) => {
     const active = isActive(pathname, href);
@@ -166,6 +168,16 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
           <Search aria-hidden className="size-4 shrink-0" />
           <span className="sr-only flex-1 text-left lg:not-sr-only">Search</span>
           <Kbd className="max-lg:hidden!">{searchKey}</Kbd>
+        </button>
+        <button
+          type="button"
+          onClick={toggleAssistant}
+          title="Assistant"
+          className="flex h-9 items-center justify-center gap-2 rounded-lg bg-card/70 text-sm text-muted-foreground shadow-card transition-[scale,background-color] duration-150 ease-out active:scale-[0.98] lg:h-8 lg:justify-start lg:px-2.5 pointer-fine:hover:bg-card"
+        >
+          <Mic aria-hidden className="size-4 shrink-0" />
+          <span className="sr-only flex-1 text-left lg:not-sr-only">Assistant</span>
+          <Kbd className="max-lg:hidden!">{isMac ? "⌘J" : "Ctrl J"}</Kbd>
         </button>
         <button
           type="button"

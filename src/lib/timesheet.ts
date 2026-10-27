@@ -34,6 +34,8 @@ export interface Timesheet {
 const timesheetChanged = createChangeSignal();
 /** Runs `onChange` after a clock-in, clock-out, edit or delete. */
 export const useTimesheetChanged = timesheetChanged.useChanged;
+/** For hours saved somewhere other than this file (the assistant) */
+export const emitTimesheetChanged = timesheetChanged.emit;
 
 export const getCurrentEntry = async (): Promise<TimeEntry | null> => (await api.get<{ data: TimeEntry | null }>('/timesheet/current')).data.data;
 

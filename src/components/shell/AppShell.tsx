@@ -1,7 +1,10 @@
 "use client";
 
+import { Mic } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
+import { Assistant } from "@/features/assistant/Assistant";
+import { openAssistant, toggleAssistant, useAssistantOpen } from "@/features/assistant/assistantOpen";
 import { useSession } from "@/lib/session";
 import { closeAllSheets, openNewShift } from "@/lib/sheets";
 import { LoadError } from "../ui/States";
@@ -16,6 +19,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [searching, setSearching] = useState(false);
   const isSignedIn = session.status === "signedIn";
+  const assistant = useAssistantOpen();
 
   useEffect(() => {
     if (session.status !== "anonymous") return;
@@ -23,7 +27,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     router.replace("/login");
   }, [session.status, router]);
 
-  // Ctrl/⌘ K = search, from anywhere. N = new shift — unless the person is typing or a panel is open.
+  // Ctrl/⌘ K = search, Ctrl/⌘ J = the assistant, from anywhere. N = new shift — unless the person is typing or a panel is open.
   useEffect(() => {
     if (!isSignedIn) return;
     const onKey = (event: KeyboardEvent) => {
@@ -31,6 +35,11 @@ export function AppShell({ children }: { children: ReactNode }) {
       if (key === "k" && (event.metaKey || event.ctrlKey)) {
         event.preventDefault();
         setSearching((value) => !value);
+        return;
+      }
+      if (key === "j" && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        toggleAssistant();
         return;
       }
       const target = event.target as HTMLElement;
@@ -67,14 +76,27 @@ export function AppShell({ children }: { children: ReactNode }) {
         Skip to content
       </a>
       <Sidebar onSearch={() => setSearching(true)} />
-      {/* Bottom padding keeps the last row clear of the phone tab bar */}
+      {/* Bottom padding keeps the last row clear of the phone tab bar and the assistant button above it */}
       {/* Keyed by person: nothing one account loaded may still be on screen for the next */}
-      <main key={session.user.id} id="content" className="mx-auto w-full max-w-[76rem] min-w-0 px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:px-6 md:pb-12 lg:px-10">
+      <main key={session.user.id} id="content" className="mx-auto w-full max-w-[76rem] min-w-0 px-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:px-6 md:pb-12 lg:px-10">
         {children}
       </main>
       <BottomNav />
+      {/* On a phone the assistant is a thumb away, just above the tabs; wider screens open it from the sidebar */}
+      {!assistant.open && (
+        <button
+          type="button"
+          aria-label="Assistant"
+          onClick={() => openAssistant()}
+          className="fixed right-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-20 flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-pop transition-[scale] duration-150 ease-out active:scale-90 md:hidden"
+        >
+          <Mic aria-hidden className="size-5" />
+        </button>
+      )}
       <SheetHost />
       {searching && <CommandPalette onClose={() => setSearching(false)} />}
+      {/* Keyed by person, like the page: one account’s conversation never shows for the next */}
+      <Assistant key={`assistant-${session.user.id}`} />
     </div>
   );
 }
