@@ -185,8 +185,14 @@ export const speak = (text: string) =>
     utterance.lang = voiceLanguageOf(text);
     utterance.voice = voiceFor(utterance.lang);
     utterance.rate = 1.05;
-    utterance.onend = () => resolve();
-    utterance.onerror = () => resolve();
+    // Chrome sometimes never fires "end" (a voice that failed to load): don't wait forever
+    const giveUp = setTimeout(resolve, 3000 + text.length * 90);
+    const done = () => {
+      clearTimeout(giveUp);
+      resolve();
+    };
+    utterance.onend = done;
+    utterance.onerror = done;
     synth.speak(utterance);
   });
 
