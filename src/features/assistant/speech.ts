@@ -116,7 +116,8 @@ export function useListening({ lang, onPhrase }: { lang: string; onPhrase: (text
         // "no-speech" and "aborted" are ordinary: silence, or our own stop
         if (code === "not-allowed" || code === "service-not-allowed") setError("blocked");
         else if (code === "audio-capture") setError("no-mic");
-        else if (code === "network") setError("offline");
+        // Online and still "network": the browser has the API but no speech service behind it (Brave)
+        else if (code === "network") setError(navigator.onLine ? "unavailable" : "offline");
         else return;
         wanted.current = false;
       };
