@@ -129,6 +129,8 @@ try {
     ["please show my shift on", turn("Here is your Boathouse shift.", { actions: [{ type: "openShift", shiftId: later.id }] })],
     ["close it", turn("Closed.", { actions: [{ type: "closePanels" }] })],
     ["add a boathouse shift next friday", turn("Boathouse, 8 to 2. Should I add it?", { pending: card(dayAt(10, 8), dayAt(10, 14)) })],
+    ["is now 2 to 10", turn("Should I change it to 2 to 10?", { pending: { type: "editShift", shiftId: later.id, jobId: boathouse.id, startTime: dayAt(3, 14), endTime: dayAt(3, 22), allowOverlap: false, preview: { before: { ...badge, startTime: later.startTime, endTime: later.endTime }, after: { ...badge, startTime: dayAt(3, 14), endTime: dayAt(3, 22) }, overlaps: [] } } })],
+    ["i don't have a shift", turn("Should I take it off your schedule?", { pending: { type: "removeShifts", shiftIds: [later.id], preview: { shifts: [{ ...badge, startTime: later.startTime, endTime: later.endTime, missed: false }] } } })],
     ["when is my next shift", turn(`Your next shift is at Boathouse on ${weekday}, 9 to 5.`)],
   ];
   const scriptGemini = async (target) => {
@@ -220,6 +222,41 @@ try {
     await panel().getByRole("button", { name: "Add shift" }).click();
     await panel().getByText("Shift added.").waitFor();
     if ((await api("get", "/shifts")).length !== 2) throw new Error("the Save button did not save");
+  });
+
+  // An earlier "Undone" is already on screen, so wait for one more
+  const undoLatest = async () => {
+    const undone = () => panel().getByText("Undone", { exact: true }).count();
+    const before = await undone();
+    await panel().getByRole("button", { name: "Undo" }).last().click();
+    for (const started = Date.now(); (await undone()) <= before; ) {
+      if (Date.now() - started > 10000) throw new Error("Undo didn’t finish");
+      await page.waitForTimeout(100);
+    }
+  };
+
+  await step("a new time for a shift you have is a change card: Change shift saves it, Undo puts the old time back", async () => {
+    await panel().getByLabel("Message").fill(`my ${weekday} shift is now 2 to 10`);
+    await panel().getByLabel("Message").press("Enter");
+    await panel().getByRole("region", { name: "Change shift" }).waitFor({ timeout: REPLY_MS });
+    await shot("ai-edit-card");
+    await panel().getByRole("button", { name: "Change shift" }).click();
+    await panel().getByText("Shift changed.").waitFor();
+    const changed = (await api("get", "/shifts")).find((shift) => shift.id === later.id);
+    if (changed?.startTime !== dayAt(3, 14)) throw new Error(`start is ${changed?.startTime}`);
+    await undoLatest();
+    if ((await api("get", "/shifts")).find((shift) => shift.id === later.id)?.startTime !== later.startTime) throw new Error("the old time is not back");
+  });
+
+  await step("“I don't have a shift that day” is a remove card; Undo brings the shift back", async () => {
+    await panel().getByLabel("Message").fill(`I don't have a shift on ${weekday}`);
+    await panel().getByLabel("Message").press("Enter");
+    await panel().getByRole("region", { name: "Remove from schedule" }).waitFor({ timeout: REPLY_MS });
+    await panel().getByRole("button", { name: "Remove shift" }).click();
+    await panel().getByText("Shift removed.").waitFor();
+    if ((await api("get", "/shifts")).some((shift) => shift.id === later.id)) throw new Error("still there");
+    await undoLatest();
+    if (!(await api("get", "/shifts")).some((shift) => shift.startTime === later.startTime)) throw new Error("not back");
   });
 
   await step("replies can be silenced, and the language choice is kept", async () => {

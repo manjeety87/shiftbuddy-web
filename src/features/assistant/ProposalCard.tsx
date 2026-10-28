@@ -12,13 +12,15 @@ const minutesBetween = (start: string, end: string) => Math.round((new Date(end)
 /** The button says what will happen, and the reply after it uses the same verb */
 export const saveLabel = (proposal: Proposal) => {
   if (proposal.type === "addShifts") return proposal.shifts.length === 1 ? "Add shift" : `Add ${proposal.shifts.length} shifts`;
+  if (proposal.type === "editShift") return "Change shift";
+  if (proposal.type === "removeShifts") return proposal.shiftIds.length === 1 ? "Remove shift" : `Remove ${proposal.shiftIds.length} shifts`;
   return proposal.type === "markMissed" ? "Mark missed" : "Add hours";
 };
 
-function ShiftLine({ jobName, role, color, startTime, endTime, detail }: { jobName: string; role: string | null; color: string; startTime: string; endTime: string; detail?: string }) {
+function ShiftLine({ jobName, role, color, startTime, endTime, detail, muted }: { jobName: string; role: string | null; color: string; startTime: string; endTime: string; detail?: string; muted?: boolean }) {
   return (
-    <li className="flex gap-3 py-2 first:pt-0 last:pb-0">
-      <span aria-hidden className="w-1 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+    <li className={`flex gap-3 py-2 first:pt-0 last:pb-0 ${muted ? "text-muted-foreground line-through decoration-muted-foreground/60" : ""}`}>
+      <span aria-hidden className="w-1 shrink-0 rounded-full" style={{ backgroundColor: color, opacity: muted ? 0.45 : 1 }} />
       <div className="min-w-0 flex-1">
         <p className="flex items-baseline justify-between gap-3 text-sm font-semibold tabular-nums">
           <span>{formatDate(startTime)}</span>
@@ -37,13 +39,33 @@ function ShiftLine({ jobName, role, color, startTime, endTime, detail }: { jobNa
   );
 }
 
+const TITLES: { [Type in Proposal["type"]]: (proposal: Proposal) => string } = {
+  addShifts: (proposal) => (proposal.type === "addShifts" && proposal.shifts.length > 1 ? `${proposal.shifts.length} new shifts` : "New shift"),
+  editShift: () => "Change shift",
+  removeShifts: (proposal) => (proposal.type === "removeShifts" && proposal.shiftIds.length > 1 ? `Remove ${proposal.shiftIds.length} shifts` : "Remove from schedule"),
+  markMissed: () => "Mark as missed",
+  logHours: () => "Hours worked",
+};
+
+const clashText = (overlaps: { jobName: string; startTime: string; endTime: string }[]) =>
+  `Overlaps ${overlaps.map((shift) => `${shift.jobName}, ${formatTime(shift.startTime)} – ${formatTime(shift.endTime)}`).join(" and ")}.`;
+
+function Clash({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mt-2.5 flex gap-2 rounded-lg bg-warning/12 px-2.5 py-2 text-xs text-warning-ink">
+      <TriangleAlert aria-hidden className="mt-px size-3.5 shrink-0" />
+      <span>{children}</span>
+    </p>
+  );
+}
+
 /**
  * What the assistant offers to save, before anything is saved: the person reads it
  * and says yes (or taps the button). It is the page's one primary action while it
  * waits, so it sits right above the place you talk or type.
  */
 export function ProposalCard({ proposal, busy, listening, onSave, onDismiss }: { proposal: Proposal; busy: boolean; listening: boolean; onSave: () => void; onDismiss: () => void }) {
-  const title = proposal.type === "addShifts" ? (proposal.shifts.length === 1 ? "New shift" : `${proposal.shifts.length} new shifts`) : proposal.type === "markMissed" ? "Mark as missed" : "Hours worked";
+  const title = TITLES[proposal.type](proposal);
 
   return (
     <section aria-label={title} className="assistant-card rounded-xl bg-card p-3.5 shadow-pop">
@@ -57,16 +79,28 @@ export function ProposalCard({ proposal, busy, listening, onSave, onDismiss }: {
             ))}
           </ul>
           {proposal.preview.overlaps.length > 0 && (
-            <p className="mt-2.5 flex gap-2 rounded-lg bg-warning/12 px-2.5 py-2 text-xs text-warning-ink">
-              <TriangleAlert aria-hidden className="mt-px size-3.5 shrink-0" />
-              <span>
-                {proposal.shifts.length === 1
-                  ? `Overlaps ${proposal.preview.overlaps.map((shift) => `${shift.jobName}, ${formatTime(shift.startTime)} – ${formatTime(shift.endTime)}`).join(" and ")}. Saving keeps both.`
-                  : "Some of these clash with shifts you already have; those are skipped."}
-              </span>
-            </p>
+            <Clash>{proposal.shifts.length === 1 ? `${clashText(proposal.preview.overlaps)} Saving keeps both.` : "Some of these clash with shifts you already have; those are skipped."}</Clash>
           )}
         </>
+      )}
+
+      {proposal.type === "editShift" && (
+        <>
+          {/* Was → will be: the old line struck through, so the change reads at a glance */}
+          <ul className="divide-y divide-border">
+            <ShiftLine {...proposal.preview.before} detail="Now" muted />
+            <ShiftLine {...proposal.preview.after} detail="Changes to" />
+          </ul>
+          {proposal.preview.overlaps.length > 0 && <Clash>{clashText(proposal.preview.overlaps)} Saving keeps both.</Clash>}
+        </>
+      )}
+
+      {proposal.type === "removeShifts" && (
+        <ul className="max-h-48 divide-y divide-border overflow-y-auto overscroll-contain">
+          {proposal.preview.shifts.map((shift) => (
+            <ShiftLine key={shift.startTime} {...shift} detail={shift.missed ? "Missed" : undefined} muted />
+          ))}
+        </ul>
       )}
 
       {proposal.type === "markMissed" && (

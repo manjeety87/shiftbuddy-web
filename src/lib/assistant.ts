@@ -27,6 +27,16 @@ export type Proposal =
           allowOverlap: boolean;
           preview: { shifts: (JobBadge & Timed & { notes: string | null })[]; overlaps: (JobBadge & Timed)[] };
       }
+    | {
+          type: 'editShift';
+          shiftId: string;
+          jobId: string;
+          startTime: string;
+          endTime: string;
+          allowOverlap: boolean;
+          preview: { before: JobBadge & Timed; after: JobBadge & Timed; overlaps: (JobBadge & Timed)[] };
+      }
+    | { type: 'removeShifts'; shiftIds: string[]; preview: { shifts: (JobBadge & Timed & { missed: boolean })[] } }
     | { type: 'markMissed'; shiftId: string; reason: MissedReason; preview: JobBadge & Timed }
     | {
           type: 'logHours';
@@ -44,6 +54,8 @@ export interface Saved {
     /** Several shifts at once: the ones that clashed and were left out */
     skipped: number;
     entryId?: string;
+    /** A change or removal: what puts it back (sent to /assistant/confirm) */
+    undo?: Record<string, unknown>;
 }
 
 export type AssistantPage = 'home' | 'shifts' | 'calendar' | 'jobs' | 'timesheet' | 'sharing' | 'settings';
@@ -85,8 +97,8 @@ export const sendToAssistant = async (input: { message: string; history: History
     return data.data;
 };
 
-/** The card's Save button */
-export const confirmProposal = async (proposal: Proposal): Promise<Saved> => {
+/** The card's Save button — or Undo, with the `undo` a change or removal came back with */
+export const confirmProposal = async (proposal: Proposal | NonNullable<Saved['undo']>): Promise<Saved> => {
     const { data } = await api.post<{ data: Saved }>('/assistant/confirm', { proposal });
     announce(data.data);
     return data.data;
