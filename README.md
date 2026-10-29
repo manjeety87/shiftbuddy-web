@@ -78,7 +78,9 @@ turns the shared schedules off; the same switch is on Sharing, under "Shared wit
 
 **The assistant** (`features/assistant/`, Ctrl/⌘ J, the sidebar's Assistant, the mic button
 above the tabs on a phone). The browser turns speech into text (Web Speech API: Chrome, Edge,
-Safari; Firefox can only type) and reads replies aloud; `POST /assistant/messages` does the
+Safari) and reads replies aloud. Where that service is missing or fails (Firefox, Brave, a Chrome
+that can't reach it) `recorder.ts` records instead — it stops after a pause, converts to 16 kHz WAV
+and sends `POST /assistant/voice`, like the phone app; `POST /assistant/messages` does the
 rest with Gemini. Anything that saves comes back as a card and waits for a yes — spoken
 ("haan, add kardo") or the card's button (`POST /assistant/confirm`). The conversation is kept
 in memory in `Assistant.tsx` and sent with each turn. While a shift's panel is open the assistant

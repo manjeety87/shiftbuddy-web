@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { confirmProposal, sendToAssistant, type AssistantAction, type AssistantPage, type HistoryLine, type Proposal, type Saved } from "@/lib/assistant";
+import { confirmProposal, sendToAssistant, sendVoiceToAssistant, type AssistantAction, type AssistantTurn, type AssistantPage, type HistoryLine, type Proposal, type Saved } from "@/lib/assistant";
 import { clearShiftMissed } from "@/lib/missedShifts";
 import { setPreference, usePreference } from "@/lib/preferences";
 import { closeAllSheets, openNewShift, openSheet } from "@/lib/sheets";
@@ -11,6 +11,7 @@ import { deleteShift } from "@/lib/shifts";
 import { deleteTimeEntry } from "@/lib/timesheet";
 import { AssistantPanel, type Message } from "./AssistantPanel";
 import { closeAssistant, onAssistantOpenChange, useAssistantOpen } from "./assistantOpen";
+import { canRecord, useRecorder } from "./recorder";
 import { canListen, speak, stopSpeaking, useListening } from "./speech";
 
 const PAGES: AssistantPage[] = ["home", "shifts", "calendar", "jobs", "timesheet", "sharing", "settings"];
@@ -68,13 +69,20 @@ export function Assistant() {
   const host = useSyncExternalStore(open ? subscribeToDialogs : subscribeToNothing, open ? topDialog : noDialog, noDialog);
 
   const sendRef = useRef<(text: string) => void>(() => {});
+  const sendVoiceRef = useRef<(audio: Blob) => void>(() => {});
   const listening = useListening({ lang: language, onPhrase: (text) => sendRef.current(text) });
-  const { start: startListening, stop: stopListening } = listening;
+  const recorder = useRecorder({ onRecording: (audio) => sendVoiceRef.current(audio) });
+  const { start: startBrowserListening, stop: stopBrowserListening } = listening;
+  const { start: startRecording, stop: stopRecording } = recorder;
+  // The browser's speech service when it has one that works; otherwise a recording that
+  // ShiftBuddy writes down (Firefox, Brave, a Chrome that can't reach its speech service)
+  const recorded = !canListen() || listening.error === "unavailable";
+  const listenError = recorded ? recorder.error : listening.error;
 
   // Read inside async flows, where state from the render that started them is stale
-  const live = useRef({ messages, pending, handsFree, voice, listenError: listening.error });
+  const live = useRef({ messages, pending, handsFree, voice, listenError, recorded });
   useEffect(() => {
-    live.current = { messages, pending, handsFree, voice, listenError: listening.error };
+    live.current = { messages, pending, handsFree, voice, listenError, recorded };
   });
   const nextId = useRef(1);
   const add = useCallback((message: Omit<Message, "id">) => setMessages((list) => [...list, { ...message, id: nextId.current++ }]), []);
@@ -96,6 +104,12 @@ export function Assistant() {
     [router],
   );
 
+  const startListening = useCallback(() => (live.current.recorded ? void startRecording() : startBrowserListening()), [startRecording, startBrowserListening]);
+  const stopListening = useCallback(() => {
+    stopBrowserListening();
+    stopRecording();
+  }, [stopBrowserListening, stopRecording]);
+
   /** After a reply: listening comes back on by itself in a hands-free conversation — not after a blocked microphone */
   const resume = useCallback(() => {
     setPhase("idle");
@@ -111,36 +125,76 @@ export function Assistant() {
     [],
   );
 
+  /** Before a turn goes out: its own voice must not be heard as the next request */
+  const beginTurn = useCallback((): HistoryLine[] => {
+    stopListening();
+    stopSpeaking();
+    setPhase("thinking");
+    return live.current.messages.filter((line) => !line.failed).map(({ role, text: said }) => ({ role, text: said }));
+  }, [stopListening]);
+
+  const finishTurn = useCallback(
+    async (turn: AssistantTurn) => {
+      add({ role: "assistant", text: turn.reply, saved: turn.saved ?? undefined });
+      setPending(turn.pending);
+      turn.actions.forEach(runAction);
+      await say(turn.reply);
+      resume();
+    },
+    [add, runAction, say, resume],
+  );
+
+  const failTurn = useCallback(
+    (err: unknown, retry?: string) => {
+      add({ role: "assistant", text: errorText(err), failed: true, retry });
+      // A failing service isn't talked at in a loop: listening waits for a tap
+      setHandsFree(false);
+      setPhase("idle");
+    },
+    [add],
+  );
+
   const send = useCallback(
     async (text: string) => {
       const message = text.trim();
       if (!message) return;
-      // Its own voice must not be heard as the next request
-      stopListening();
-      stopSpeaking();
-      const history: HistoryLine[] = live.current.messages.filter((line) => !line.failed).map(({ role, text: said }) => ({ role, text: said }));
+      const history = beginTurn();
       add({ role: "user", text: message });
       setDraft("");
-      setPhase("thinking");
       try {
-        const turn = await sendToAssistant({ message, history, pending: live.current.pending, page });
-        add({ role: "assistant", text: turn.reply, saved: turn.saved ?? undefined });
-        setPending(turn.pending);
-        turn.actions.forEach(runAction);
-        await say(turn.reply);
-        resume();
+        await finishTurn(await sendToAssistant({ message, history, pending: live.current.pending, page }));
       } catch (err) {
-        add({ role: "assistant", text: errorText(err), failed: true, retry: message });
-        // A failing service isn't talked at in a loop: listening waits for a tap
-        setHandsFree(false);
-        setPhase("idle");
+        failTurn(err, message);
       }
     },
-    [add, page, runAction, say, resume, stopListening],
+    [add, page, beginTurn, finishTurn, failTurn],
   );
+
+  const sendVoice = useCallback(
+    async (audio: Blob) => {
+      const history = beginTurn();
+      try {
+        const turn = await sendVoiceToAssistant(audio, { history, pending: live.current.pending, page });
+        // Nothing clear was said: keep listening
+        if (!("reply" in turn)) return resume();
+        add({ role: "user", text: turn.heard });
+        await finishTurn(turn);
+      } catch (err) {
+        failTurn(err);
+      }
+    },
+    [add, page, beginTurn, finishTurn, failTurn, resume],
+  );
+
   useEffect(() => {
     sendRef.current = (text) => void send(text);
-  }, [send]);
+    sendVoiceRef.current = (audio) => void sendVoice(audio);
+  }, [send, sendVoice]);
+
+  // The browser's speech service turned out not to work: carry on by recording, without another tap
+  useEffect(() => {
+    if (listening.error === "unavailable" && live.current.handsFree && canRecord()) void startRecording();
+  }, [listening.error, startRecording]);
 
   const startTalking = useCallback(() => {
     stopSpeaking();
@@ -160,7 +214,7 @@ export function Assistant() {
   useEffect(
     () =>
       onAssistantOpenChange((next) => {
-        if (next.open && next.listen && canListen()) startTalking();
+        if (next.open && next.listen && (canListen() || canRecord())) startTalking();
         if (!next.open) stopTalking();
       }),
     [startTalking, stopTalking],
@@ -168,11 +222,12 @@ export function Assistant() {
 
   // Hands-free stops after a quiet stretch with nothing waiting: a forgotten open mic
   // shouldn't keep listening to the room
+  const hearing = listening.listening || recorder.recording;
   useEffect(() => {
-    if (!listening.listening || pending) return;
+    if (!hearing || pending) return;
     const timer = setTimeout(stopTalking, SLEEP_AFTER_MS);
     return () => clearTimeout(timer);
-  }, [listening.listening, listening.interim, pending, stopTalking]);
+  }, [hearing, listening.interim, pending, stopTalking]);
 
   const save = async () => {
     if (!pending) return;
@@ -216,17 +271,18 @@ export function Assistant() {
       messages={messages}
       pending={pending}
       phase={phase}
-      listening={listening.listening}
+      listening={hearing}
       heard={listening.interim}
-      listenError={listening.error}
-      canListen={canListen()}
+      listenError={listenError}
+      canListen={canListen() || canRecord()}
+      pickLanguage={!recorded}
       language={language}
       voice={voice}
       draft={draft}
       saving={saving}
       onDraft={setDraft}
       onSend={(text) => void send(text)}
-      onMic={() => (listening.listening ? stopTalking() : startTalking())}
+      onMic={() => (hearing ? stopTalking() : startTalking())}
       // Cutting the voice off ends `say`, and the turn carries on from there
       onStopSpeaking={stopSpeaking}
       onSave={() => void save()}

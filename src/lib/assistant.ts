@@ -97,6 +97,23 @@ export const sendToAssistant = async (input: { message: string; history: History
     return data.data;
 };
 
+/**
+ * A spoken turn for a browser without a speech service: the recording goes to the
+ * backend, which writes it down and answers. `heard` empty: nothing clear was said,
+ * and nothing else came back.
+ */
+export const sendVoiceToAssistant = async (audio: Blob, input: { history: HistoryLine[]; pending: Proposal | null; page?: AssistantPage }): Promise<(AssistantTurn & { heard: string }) | { heard: '' }> => {
+    const form = new FormData();
+    form.append('audio', audio, 'request.wav');
+    form.append('history', JSON.stringify(input.history.slice(-MAX_HISTORY)));
+    if (input.pending) form.append('pending', JSON.stringify(input.pending));
+    if (input.page) form.append('page', input.page);
+    form.append('timeZone', deviceTimeZone());
+    const { data } = await api.post<{ data: (AssistantTurn & { heard: string }) | { heard: '' } }>('/assistant/voice', form, { timeout: 60000 });
+    if ('saved' in data.data) announce(data.data.saved);
+    return data.data;
+};
+
 /** The card's Save button — or Undo, with the `undo` a change or removal came back with */
 export const confirmProposal = async (proposal: Proposal | NonNullable<Saved['undo']>): Promise<Saved> => {
     const { data } = await api.post<{ data: Saved }>('/assistant/confirm', { proposal });

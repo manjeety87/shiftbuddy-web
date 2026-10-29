@@ -34,7 +34,7 @@ const LISTEN_ERRORS: Record<ListenError, string> = {
   blocked: "The microphone is blocked. Allow it from the address bar, or type instead.",
   "no-mic": "No microphone found. Type instead.",
   offline: "Listening needs an internet connection. Type instead.",
-  unavailable: "This browser can’t listen. Type instead, or open ShiftBuddy in Chrome, Edge or Safari.",
+  unavailable: "This browser can’t use the microphone. Type instead.",
 };
 
 interface PanelProps {
@@ -46,6 +46,8 @@ interface PanelProps {
   heard: string;
   listenError: ListenError | null;
   canListen: boolean;
+  /** The browser's speech service listens for one language; a recording sent to ShiftBuddy needs no choice */
+  pickLanguage: boolean;
   language: "en-IN" | "hi-IN";
   voice: "on" | "off";
   draft: string;
@@ -101,7 +103,7 @@ function MicButton({ phase, listening, disabled, onMic, onStopSpeaking, size = "
  * the top so the panel stays readable — and keeps listening.
  */
 export function AssistantPanel(props: PanelProps) {
-  const { overDialog, messages, pending, phase, listening, heard, listenError, canListen, language, voice, draft, saving } = props;
+  const { overDialog, messages, pending, phase, listening, heard, listenError, canListen, pickLanguage, language, voice, draft, saving } = props;
   const [expanded, setExpanded] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -266,7 +268,7 @@ export function AssistantPanel(props: PanelProps) {
       <footer className="shrink-0 border-t border-border px-3 pt-2.5 pb-3">
         <div className="mb-2 flex items-center gap-2">
           <p className={`min-w-0 flex-1 text-xs ${listenError ? "text-destructive-ink" : "text-muted-foreground"}`}>{status}</p>
-          {canListen && <SegmentedControl label="Language I listen for" options={LANGUAGES} value={language} onChange={props.onLanguage} className="w-40 shrink-0 [&_label]:h-7! [&_label]:text-xs!" />}
+          {pickLanguage && <SegmentedControl label="Language I listen for" options={LANGUAGES} value={language} onChange={props.onLanguage} className="w-40 shrink-0 [&_label]:h-7! [&_label]:text-xs!" />}
         </div>
         <form onSubmit={submit} className="flex items-center gap-2">
           <label className="sr-only" htmlFor="assistant-input">
