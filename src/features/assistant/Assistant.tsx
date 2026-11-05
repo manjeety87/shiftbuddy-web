@@ -26,6 +26,10 @@ const savedText = (saved: Saved) => {
   if (saved.type === "removeShifts") return saved.count === 1 ? "Shift removed." : `${saved.count} shifts removed.`;
   if (saved.type === "markMissed") return "Marked as missed.";
   if (saved.type === "logHours") return "Hours added.";
+  if (saved.type === "addJob") return "Job added.";
+  if (saved.type === "editJob") return "Job changed.";
+  if (saved.type === "deleteJob") return "Job deleted.";
+  if (saved.type === "restoreJob") return "Job is back.";
   const added = saved.count === 1 ? "Shift added." : `${saved.count} shifts added.`;
   return saved.skipped ? `${added} ${saved.skipped} clashed with shifts you have and ${saved.skipped === 1 ? "was" : "were"} skipped.` : added;
 };
@@ -70,13 +74,16 @@ export function Assistant() {
 
   const sendRef = useRef<(text: string) => void>(() => {});
   const sendVoiceRef = useRef<(audio: Blob) => void>(() => {});
-  const listening = useListening({ lang: language, onPhrase: (text) => sendRef.current(text) });
+  // Hinglish is recorded (below); the browser's service only ever listens for English or Hindi
+  const listening = useListening({ lang: language === "hi-IN" ? "hi-IN" : "en-IN", onPhrase: (text) => sendRef.current(text) });
   const recorder = useRecorder({ onRecording: (audio) => sendVoiceRef.current(audio) });
   const { start: startBrowserListening, stop: stopBrowserListening } = listening;
   const { start: startRecording, stop: stopRecording } = recorder;
   // The browser's speech service when it has one that works; otherwise a recording that
-  // ShiftBuddy writes down (Firefox, Brave, a Chrome that can't reach its speech service)
-  const recorded = !canListen() || listening.error === "unavailable";
+  // ShiftBuddy writes down (Firefox, Brave, a Chrome that can't reach its speech service).
+  // Hinglish is always recorded: the browser hears it as nonsense English or Hindi.
+  const browserCanListen = canListen() && listening.error !== "unavailable";
+  const recorded = !browserCanListen || language === "hinglish";
   const listenError = recorded ? recorder.error : listening.error;
 
   // Read inside async flows, where state from the render that started them is stale
@@ -138,7 +145,7 @@ export function Assistant() {
       add({ role: "assistant", text: turn.reply, saved: turn.saved ?? undefined });
       setPending(turn.pending);
       turn.actions.forEach(runAction);
-      await say(turn.reply);
+      await say(turn.speech ?? turn.reply);
       resume();
     },
     [add, runAction, say, resume],
@@ -275,7 +282,7 @@ export function Assistant() {
       heard={listening.interim}
       listenError={listenError}
       canListen={canListen() || canRecord()}
-      pickLanguage={!recorded}
+      pickLanguage={browserCanListen}
       language={language}
       voice={voice}
       draft={draft}

@@ -81,8 +81,10 @@ above the tabs on a phone). The browser turns speech into text (Web Speech API: 
 Safari) and reads replies aloud. Where that service is missing or fails (Firefox, Brave, a Chrome
 that can't reach it) `recorder.ts` records instead — it stops after a pause, converts to 16 kHz WAV
 and sends `POST /assistant/voice`, like the phone app; `POST /assistant/messages` does the
-rest with Gemini. Anything that saves comes back as a card and waits for a yes — spoken
-("haan, add kardo") or the card's button (`POST /assistant/confirm`). The conversation is kept
+rest with Gemini. Adds and edits are saved at once and the chat line offers Undo; deleting (shifts or a job)
+and a save that clashes come back as a card and wait for a yes — spoken ("haan, kardo") or the card's
+button (`POST /assistant/confirm`). Listening: English / Hinglish / हिन्दी — Hinglish is recorded and
+written down by ShiftBuddy. A Hinglish reply is read from its `speech` (Devanagari) by a Hindi voice. The conversation is kept
 in memory in `Assistant.tsx` and sent with each turn. While a shift's panel is open the assistant
 lives inside that `<dialog>` (a modal dialog makes everything outside it inert) and shrinks to a
 pill at the top. Listening pauses while it thinks and speaks, so it never hears itself.

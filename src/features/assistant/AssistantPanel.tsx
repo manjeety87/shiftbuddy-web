@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 
 import { Spinner } from "@/components/ui/Button";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import type { Proposal, Saved } from "@/lib/assistant";
+import type { AssistantLanguage } from "@/lib/preferences";
 import { ProposalCard } from "./ProposalCard";
 import { useMicLevel, type ListenError } from "./speech";
 
@@ -27,6 +28,7 @@ const EXAMPLES = ["Add a shift tomorrow, 9 to 5", "Kal 9 se 5 ki shift hai", "We
 
 const LANGUAGES = [
   { value: "en-IN", label: "English" },
+  { value: "hinglish", label: "Hinglish" },
   { value: "hi-IN", label: "हिन्दी" },
 ] as const;
 
@@ -46,9 +48,9 @@ interface PanelProps {
   heard: string;
   listenError: ListenError | null;
   canListen: boolean;
-  /** The browser's speech service listens for one language; a recording sent to ShiftBuddy needs no choice */
+  /** English / Hinglish / Hindi — only while the browser's speech service works; without it everything is recorded */
   pickLanguage: boolean;
-  language: "en-IN" | "hi-IN";
+  language: AssistantLanguage;
   voice: "on" | "off";
   draft: string;
   saving: boolean;
@@ -59,7 +61,7 @@ interface PanelProps {
   onSave: () => void;
   onDismissCard: () => void;
   onUndo: (message: Message) => void;
-  onLanguage: (language: "en-IN" | "hi-IN") => void;
+  onLanguage: (language: AssistantLanguage) => void;
   onVoice: (voice: "on" | "off") => void;
   onClose: () => void;
 }
@@ -268,7 +270,7 @@ export function AssistantPanel(props: PanelProps) {
       <footer className="shrink-0 border-t border-border px-3 pt-2.5 pb-3">
         <div className="mb-2 flex items-center gap-2">
           <p className={`min-w-0 flex-1 text-xs ${listenError ? "text-destructive-ink" : "text-muted-foreground"}`}>{status}</p>
-          {pickLanguage && <SegmentedControl label="Language I listen for" options={LANGUAGES} value={language} onChange={props.onLanguage} className="w-40 shrink-0 [&_label]:h-7! [&_label]:text-xs!" />}
+          {pickLanguage && <SegmentedControl label="Language I listen for" options={LANGUAGES} value={language} onChange={props.onLanguage} className="w-60 shrink-0 [&_label]:h-7! [&_label]:text-xs!" />}
         </div>
         <form onSubmit={submit} className="flex items-center gap-2">
           <label className="sr-only" htmlFor="assistant-input">

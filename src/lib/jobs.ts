@@ -8,6 +8,9 @@ const jobsChanged = createChangeSignal();
 /** Runs `onChange` whenever a job is created, edited or deleted. */
 export const useJobsChanged = jobsChanged.useChanged;
 
+/** For changes made elsewhere (the assistant), so job lists refresh */
+export const emitJobsChanged = jobsChanged.emit;
+
 export const getMyJobs = async (): Promise<Job[]> => {
     const { data } = await api.get<{ data: Job[] }>('/jobs');
     return data.data;

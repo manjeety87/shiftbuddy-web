@@ -1,6 +1,7 @@
 import type { MissedReason } from '../interfaces/shift.d';
 import { api } from './api';
 import { deviceTimeZone } from './dateUtils';
+import { emitJobsChanged } from './jobs';
 import { emitShiftsChanged } from './shiftEvents';
 import { emitTimesheetChanged } from './timesheet';
 
@@ -45,15 +46,20 @@ export type Proposal =
           clockOut: string;
           breakMinutes?: number;
           preview: JobBadge & Timed & { clockIn: string; clockOut: string; breakMinutes: number; paidMinutes: number };
-      };
+      }
+    | { type: 'addJob'; job: { companyName: string; title: string; hourlyRate?: number; color?: string }; preview: JobBadge }
+    | { type: 'editJob'; jobId: string; changes: Record<string, unknown>; preview: { before: JobBadge; after: JobBadge } }
+    | { type: 'deleteJob'; jobId: string; preview: JobBadge & { upcomingShifts: number } };
 
 export interface Saved {
-    type: Proposal['type'];
+    /** restoreJob: an Undo of deleteJob */
+    type: Proposal['type'] | 'restoreJob';
     count: number;
     shiftIds: string[];
     /** Several shifts at once: the ones that clashed and were left out */
     skipped: number;
     entryId?: string;
+    jobId?: string;
     /** A change or removal: what puts it back (sent to /assistant/confirm) */
     undo?: Record<string, unknown>;
 }
@@ -69,6 +75,8 @@ export type AssistantAction =
 
 export interface AssistantTurn {
     reply: string;
+    /** A Hinglish reply in Devanagari, for a Hindi voice to read (Roman Hindi sounds wrong in any voice) */
+    speech: string | null;
     /** The card waiting after this turn (null: none) */
     pending: Proposal | null;
     actions: AssistantAction[];
@@ -86,8 +94,10 @@ export const MAX_HISTORY = 12;
 /** Lists and the timesheet show what a confirmed card changed */
 const announce = (saved: Saved | null) => {
     if (!saved) return;
+    // A deleted or restored job takes its upcoming shifts with it
     emitShiftsChanged();
     if (saved.type === 'logHours') emitTimesheetChanged();
+    if (saved.type.endsWith('Job')) emitJobsChanged();
 };
 
 export const sendToAssistant = async (input: { message: string; history: HistoryLine[]; pending: Proposal | null; page?: AssistantPage }): Promise<AssistantTurn> => {
