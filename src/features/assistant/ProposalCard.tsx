@@ -17,8 +17,43 @@ export const saveLabel = (proposal: Proposal) => {
   if (proposal.type === "addJob") return "Add job";
   if (proposal.type === "editJob") return "Change job";
   if (proposal.type === "deleteJob") return "Delete job";
-  return proposal.type === "markMissed" ? "Mark missed" : "Add hours";
+  if (proposal.type === "logHours") return proposal.entries.some((entry) => entry.entryId) ? "Save hours" : "Add hours";
+  return "Mark missed";
 };
+
+const timeSpan = (start: string, end: string) => `${formatTime(start)} – ${formatTime(end)}`;
+
+/**
+ * One day's hours. The paid time leads, because it is the number the person said
+ * ("8 hours 12 minutes"); clock-out and break are how it got there. Hours being
+ * replaced sit under it, struck through.
+ */
+function HoursLine({ entry }: { entry: Extract<Proposal, { type: "logHours" }>["preview"]["entries"][number] }) {
+  return (
+    <li className="flex gap-3 py-2.5 first:pt-0 last:pb-0">
+      <span aria-hidden className="w-1 shrink-0 rounded-full" style={{ backgroundColor: entry.color }} />
+      <div className="min-w-0 flex-1">
+        <p className="flex items-baseline justify-between gap-3">
+          <span className="text-sm font-semibold">{formatDate(entry.startTime)}</span>
+          <span className="shrink-0 text-base font-semibold tabular-nums">{formatDuration(entry.paidMinutes)} paid</span>
+        </p>
+        <p className="text-sm tabular-nums text-muted-foreground">
+          {timeSpan(entry.clockIn, entry.clockOut)}
+          {entry.breakMinutes ? ` · ${entry.breakMinutes} min break` : " · no break"}
+        </p>
+        {entry.before && (
+          <p className="text-xs tabular-nums text-muted-foreground">
+            Replaces <span className="line-through decoration-muted-foreground/60">{entry.before.paidMinutes == null ? `${formatTime(entry.before.clockIn)}, still clocked in` : `${formatDuration(entry.before.paidMinutes)} · ${timeSpan(entry.before.clockIn, entry.before.clockOut)}`}</span>
+          </p>
+        )}
+        <p className="truncate text-xs text-muted-foreground">
+          {entry.jobName}
+          {entry.role ? ` · ${entry.role}` : ""}
+        </p>
+      </div>
+    </li>
+  );
+}
 
 function JobLine({ jobName, role, color, detail, muted }: { jobName: string; role: string | null; color: string; detail?: string; muted?: boolean }) {
   return (
@@ -62,7 +97,7 @@ const TITLES: { [Type in Proposal["type"]]: (proposal: Proposal) => string } = {
   editShift: () => "Change shift",
   removeShifts: (proposal) => (proposal.type === "removeShifts" && proposal.shiftIds.length > 1 ? `Remove ${proposal.shiftIds.length} shifts` : "Remove from schedule"),
   markMissed: () => "Mark as missed",
-  logHours: () => "Hours worked",
+  logHours: (proposal) => (proposal.type === "logHours" && proposal.entries.length > 1 ? `Hours worked on ${proposal.entries.length} shifts` : "Hours worked"),
   addJob: () => "New job",
   editJob: () => "Change job",
   deleteJob: () => "Delete job",
@@ -131,13 +166,10 @@ export function ProposalCard({ proposal, busy, listening, onSave, onDismiss }: {
       )}
 
       {proposal.type === "logHours" && (
-        <ul>
-          <ShiftLine
-            {...proposal.preview}
-            startTime={proposal.preview.clockIn}
-            endTime={proposal.preview.clockOut}
-            detail={`${proposal.preview.breakMinutes ? `${proposal.preview.breakMinutes} min break · ` : ""}${formatDuration(proposal.preview.paidMinutes)} paid`}
-          />
+        <ul className="max-h-60 divide-y divide-border overflow-y-auto overscroll-contain">
+          {proposal.preview.entries.map((entry) => (
+            <HoursLine key={entry.startTime} entry={entry} />
+          ))}
         </ul>
       )}
 

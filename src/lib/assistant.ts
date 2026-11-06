@@ -7,7 +7,7 @@ import { emitTimesheetChanged } from './timesheet';
 
 // The assistant: the person says (or types) something, the backend asks Gemini what
 // it means and answers with words, a card to confirm, and places to open. Nothing
-// is saved until a yes — by voice ("haan, add kardo") or the card's Save button.
+// is saved until a yes — by voice ("haan, add kardo") or the card's button.
 
 /** A job as a card draws it */
 interface JobBadge {
@@ -19,6 +19,13 @@ interface JobBadge {
 interface Timed {
     startTime: string;
     endTime: string;
+}
+
+interface HoursWorked {
+    clockIn: string;
+    clockOut: string;
+    breakMinutes: number;
+    paidMinutes: number;
 }
 
 export type Proposal =
@@ -41,26 +48,23 @@ export type Proposal =
     | { type: 'markMissed'; shiftId: string; reason: MissedReason; preview: JobBadge & Timed }
     | {
           type: 'logHours';
-          shiftId: string;
-          clockIn: string;
-          clockOut: string;
-          breakMinutes?: number;
-          preview: JobBadge & Timed & { clockIn: string; clockOut: string; breakMinutes: number; paidMinutes: number };
+          /** One per shift; `entryId` when it replaces the hours that shift has */
+          entries: { shiftId: string; entryId: string | null; clockIn: string; clockOut: string; breakMinutes?: number }[];
+          preview: { entries: (JobBadge & Timed & HoursWorked & { before: (HoursWorked & { paidMinutes: number | null }) | null })[] };
       }
     | { type: 'addJob'; job: { companyName: string; title: string; hourlyRate?: number; color?: string }; preview: JobBadge }
     | { type: 'editJob'; jobId: string; changes: Record<string, unknown>; preview: { before: JobBadge; after: JobBadge } }
     | { type: 'deleteJob'; jobId: string; preview: JobBadge & { upcomingShifts: number } };
 
 export interface Saved {
-    /** restoreJob: an Undo of deleteJob */
-    type: Proposal['type'] | 'restoreJob';
+    /** restoreJob / undoHours: an Undo of deleteJob / logHours */
+    type: Proposal['type'] | 'restoreJob' | 'undoHours';
     count: number;
     shiftIds: string[];
     /** Several shifts at once: the ones that clashed and were left out */
     skipped: number;
-    entryId?: string;
     jobId?: string;
-    /** A change or removal: what puts it back (sent to /assistant/confirm) */
+    /** What puts it back (sent to /assistant/confirm); added shifts are deleted instead */
     undo?: Record<string, unknown>;
 }
 
@@ -96,7 +100,7 @@ const announce = (saved: Saved | null) => {
     if (!saved) return;
     // A deleted or restored job takes its upcoming shifts with it
     emitShiftsChanged();
-    if (saved.type === 'logHours') emitTimesheetChanged();
+    if (saved.type === 'logHours' || saved.type === 'undoHours') emitTimesheetChanged();
     if (saved.type.endsWith('Job')) emitJobsChanged();
 };
 
