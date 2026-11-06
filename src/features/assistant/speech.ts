@@ -205,13 +205,15 @@ export const stopSpeaking = () => {
 
 /**
  * How loud the microphone is while listening, 0–1, written straight to a CSS
- * variable on `target` each frame (no React render per frame). The speech service
- * doesn't report levels, so this opens its own reading of the same microphone.
+ * variable on each of `targets` each frame (no React render per frame). Set on the
+ * few elements that move rather than on a parent, so the conversation in between
+ * isn't restyled every frame. The speech service doesn't report levels, so this
+ * opens its own reading of the same microphone. `targets` must be a stable array.
  */
-export function useMicLevel(active: boolean, target: React.RefObject<HTMLElement | null>) {
+export function useMicLevel(active: boolean, targets: React.RefObject<HTMLElement | null>[]) {
   useEffect(() => {
-    const element = target.current;
-    if (!active || !element || !navigator.mediaDevices?.getUserMedia) return;
+    const elements = targets.map((target) => target.current).filter((element): element is HTMLElement => element !== null);
+    if (!active || elements.length === 0 || !navigator.mediaDevices?.getUserMedia) return;
     let stream: MediaStream | null = null;
     let context: AudioContext | null = null;
     let frame = 0;
@@ -235,7 +237,7 @@ export function useMicLevel(active: boolean, target: React.RefObject<HTMLElement
           const level = Math.min(1, Math.sqrt(sum / samples.length) * 4);
           // Rise fast, fall slowly — a voice reads as a voice, not as flicker
           smooth = level > smooth ? smooth + (level - smooth) * 0.5 : smooth + (level - smooth) * 0.12;
-          element.style.setProperty("--level", smooth.toFixed(3));
+          for (const element of elements) element.style.setProperty("--level", smooth.toFixed(3));
           frame = requestAnimationFrame(tick);
         };
         tick();
@@ -249,7 +251,7 @@ export function useMicLevel(active: boolean, target: React.RefObject<HTMLElement
       cancelAnimationFrame(frame);
       stream?.getTracks().forEach((track) => track.stop());
       void context?.close();
-      element.style.setProperty("--level", "0");
+      for (const element of elements) element.style.setProperty("--level", "0");
     };
-  }, [active, target]);
+  }, [active, targets]);
 }

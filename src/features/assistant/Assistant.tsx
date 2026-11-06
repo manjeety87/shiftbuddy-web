@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { confirmProposal, sendToAssistant, sendVoiceToAssistant, type AssistantAction, type AssistantTurn, type AssistantPage, type HistoryLine, type Proposal, type Saved } from "@/lib/assistant";
+import { confirmProposal, refreshAfterLostReply, sendToAssistant, transcribeRecording, type AssistantAction, type AssistantTurn, type AssistantPage, type HistoryLine, type Proposal, type Saved } from "@/lib/assistant";
 import { clearShiftMissed } from "@/lib/missedShifts";
 import { setPreference, usePreference } from "@/lib/preferences";
 import { closeAllSheets, openNewShift, openSheet } from "@/lib/sheets";
@@ -17,7 +17,10 @@ const PAGES: AssistantPage[] = ["home", "shifts", "calendar", "jobs", "timesheet
 // Hands-free listening turns itself off after this long with nothing said and nothing waiting
 const SLEEP_AFTER_MS = 30_000;
 
-const errorText = (err: unknown) => (err as { response?: { data?: { message?: string } | null } }).response?.data?.message ?? "Couldn’t reach ShiftBuddy. Check your connection and try again.";
+type RequestError = { response?: { data?: { message?: string } | null } };
+const errorText = (err: unknown) => (err as RequestError).response?.data?.message ?? "Couldn’t reach ShiftBuddy. Check your connection and try again.";
+/** No answer at all (timeout, dropped connection): the request may still have done its work */
+const isLost = (err: unknown) => !(err as RequestError).response;
 
 /** What a Save on the card did, said the way the button said it */
 const savedText = (saved: Saved) => {
@@ -152,7 +155,14 @@ export function Assistant() {
 
   const failTurn = useCallback(
     (err: unknown, retry?: string) => {
-      add({ role: "assistant", text: errorText(err), failed: true, retry });
+      if (isLost(err) && live.current.pending) {
+        // A "yes" whose answer got lost may have saved: the card goes (it may be done), the lists refresh
+        setPending(null);
+        refreshAfterLostReply();
+        add({ role: "assistant", text: "I didn’t hear back from ShiftBuddy, so that may have saved. Your calendar is up to date — have a look before asking again.", failed: true });
+      } else {
+        add({ role: "assistant", text: errorText(err), failed: true, retry });
+      }
       // A failing service isn't talked at in a loop: listening waits for a tap
       setHandsFree(false);
       setPhase("idle");
@@ -176,20 +186,25 @@ export function Assistant() {
     [add, page, beginTurn, finishTurn, failTurn],
   );
 
+  /** A recording: written down first (shown as theirs), then sent like a typed message */
   const sendVoice = useCallback(
     async (audio: Blob) => {
-      const history = beginTurn();
+      beginTurn();
+      let heard: string;
       try {
-        const turn = await sendVoiceToAssistant(audio, { history, pending: live.current.pending, page });
-        // Nothing clear was said: keep listening
-        if (!("reply" in turn)) return resume();
-        add({ role: "user", text: turn.heard });
-        await finishTurn(turn);
+        heard = await transcribeRecording(audio);
       } catch (err) {
-        failTurn(err);
+        // Nothing was sent to the assistant yet, so nothing can have saved
+        add({ role: "assistant", text: errorText(err), failed: true });
+        setHandsFree(false);
+        setPhase("idle");
+        return;
       }
+      // Nothing clear was said: keep listening
+      if (!heard) return resume();
+      await send(heard);
     },
-    [add, page, beginTurn, finishTurn, failTurn, resume],
+    [add, beginTurn, send, resume],
   );
 
   useEffect(() => {

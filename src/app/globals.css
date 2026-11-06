@@ -1071,6 +1071,23 @@ body {
   }
 }
 
+/* Listening: the header turns into a field of the accent (a colour change, not motion,
+   so it is the same with reduced motion), and its bars follow the voice */
+.assistant-header {
+  transition:
+    background-color 200ms ease,
+    color 200ms ease,
+    border-color 200ms ease;
+}
+.level-bars span {
+  width: 3px;
+  height: 100%;
+  border-radius: 2px;
+  background: currentColor;
+  scale: 1 calc(0.22 + var(--level, 0) * var(--reach, 1) * 0.78);
+  transition: scale 60ms linear;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .assistant-panel,
   .assistant-card {
@@ -1079,5 +1096,10 @@ body {
   /* The level still shows, as brightness instead of size */
   .mic-halo {
     opacity: calc(0.12 + var(--level, 0) * 0.45);
+  }
+  .level-bars span {
+    scale: 1 0.6;
+    opacity: calc(0.45 + var(--level, 0) * 0.55);
+    transition: none;
   }
 }

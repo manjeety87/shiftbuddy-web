@@ -83,7 +83,10 @@ that can't reach it) `recorder.ts` records instead — it stops after a pause, c
 and sends `POST /assistant/voice`, like the phone app; `POST /assistant/messages` does the
 rest with Gemini. Every change comes back as a card and waits for a yes — spoken ("haan, kardo") or the card's
 button (`POST /assistant/confirm`); the saved line then offers Undo. Listening: English / Hinglish / हिन्दी — Hinglish is recorded and
-written down by ShiftBuddy. A Hinglish reply is read from its `speech` (Devanagari) by a Hindi voice. The conversation is kept
+written down by ShiftBuddy (`POST /assistant/transcribe`, shown as theirs, then sent as a normal turn). A Hinglish
+reply is read from its `speech` (Devanagari) by a Hindi voice. While the microphone is open the panel's header turns
+into a field of the accent with bars that follow the voice. A reply that never arrives while a card waits clears the card
+and refreshes every list (it may have saved). The conversation is kept
 in memory in `Assistant.tsx` and sent with each turn. While a shift's panel is open the assistant
 lives inside that `<dialog>` (a modal dialog makes everything outside it inert) and shrinks to a
 pill at the top. Listening pauses while it thinks and speaks, so it never hears itself.

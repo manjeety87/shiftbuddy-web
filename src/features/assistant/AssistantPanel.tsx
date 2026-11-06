@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowUp, Check, Maximize2, Mic, Square, Volume2, VolumeX, X } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Spinner } from "@/components/ui/Button";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import type { Proposal, Saved } from "@/lib/assistant";
@@ -67,18 +67,15 @@ interface PanelProps {
 }
 
 /**
- * The microphone is the one bold thing here. Its halo follows the voice it hears,
- * frame by frame, so the person sees they're being heard before a word appears.
+ * The microphone. Its halo follows the voice it hears (`--level`, set by the panel),
+ * so the person sees they're being heard before a word appears.
  */
 function MicButton({ phase, listening, disabled, onMic, onStopSpeaking, size = "md" }: { phase: Phase; listening: boolean; disabled: boolean; onMic: () => void; onStopSpeaking: () => void; size?: "md" | "sm" }) {
-  const button = useRef<HTMLButtonElement>(null);
-  useMicLevel(listening, button);
   const speaking = phase === "speaking";
   const label = speaking ? "Stop speaking" : listening ? "Stop listening" : "Talk";
 
   return (
     <button
-      ref={button}
       type="button"
       aria-label={label}
       title={label}
@@ -108,6 +105,13 @@ export function AssistantPanel(props: PanelProps) {
   const { overDialog, messages, pending, phase, listening, heard, listenError, canListen, pickLanguage, language, voice, draft, saving } = props;
   const [expanded, setExpanded] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
+  // The voice level goes to the parts that move with it: the header's bars and the mic (or the pill)
+  const header = useRef<HTMLElement>(null);
+  const footer = useRef<HTMLElement>(null);
+  const pill = useRef<HTMLDivElement>(null);
+  const asPill = overDialog && !expanded;
+  const levelTargets = useMemo(() => (asPill ? [pill] : [header, footer]), [asPill]);
+  useMicLevel(listening, levelTargets);
   const input = useRef<HTMLInputElement>(null);
 
   // The newest line, what's being heard, and the card stay in view
@@ -149,9 +153,9 @@ export function AssistantPanel(props: PanelProps) {
 
   const lastReply = [...messages].reverse().find((message) => message.role === "assistant");
 
-  if (overDialog && !expanded) {
+  if (asPill) {
     return (
-      <div role="region" aria-label="Assistant" onKeyDown={onKeyDown} className="assistant-pill frosted fixed top-3 left-1/2 z-50 flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-2 rounded-full bg-card/85 py-1.5 pr-1.5 pl-1.5 shadow-pop backdrop-blur-xl backdrop-saturate-150">
+      <div ref={pill} role="region" aria-label="Assistant" onKeyDown={onKeyDown} className="assistant-pill frosted fixed top-3 left-1/2 z-50 flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-2 rounded-full bg-card/85 py-1.5 pr-1.5 pl-1.5 shadow-pop backdrop-blur-xl backdrop-saturate-150">
         {canListen && <MicButton size="sm" phase={phase} listening={listening} disabled={false} onMic={props.onMic} onStopSpeaking={props.onStopSpeaking} />}
         <p aria-live="polite" className="max-w-80 min-w-0 truncate text-sm">
           {pending ? (listening ? "A card is waiting — say “yes”, or open it" : "A card is waiting") : heard || (phase === "idle" && lastReply ? lastReply.text : status)}
@@ -173,15 +177,35 @@ export function AssistantPanel(props: PanelProps) {
       onKeyDown={onKeyDown}
       className="assistant-panel frosted fixed inset-x-2 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-50 flex max-h-[min(34rem,calc(100dvh-6rem))] flex-col overflow-hidden rounded-2xl bg-background/90 shadow-modal backdrop-blur-xl backdrop-saturate-150 md:inset-x-auto md:right-6 md:bottom-6 md:max-h-[min(38rem,calc(100dvh-3rem))] md:w-[23.5rem]"
     >
-      <header className="flex h-12 shrink-0 items-center gap-1 border-b border-border pr-2 pl-4">
-        <h2 className="min-w-0 flex-1 truncate text-base font-semibold">Assistant</h2>
+      {/* While the microphone is open the header becomes a field of the accent, with bars that
+          move with the voice: you can tell from across the room that it is listening */}
+      <header
+        ref={header}
+        data-listening={listening || undefined}
+        className={`assistant-header flex h-12 shrink-0 items-center gap-1 border-b pr-2 pl-4 ${listening ? "border-transparent bg-primary text-primary-foreground" : "border-border"}`}
+      >
+        <h2 className="flex min-w-0 flex-1 items-center gap-2.5 truncate text-base font-semibold">
+          {listening ? (
+            <>
+              <span aria-hidden className="level-bars flex h-4 items-center gap-[3px]">
+                <span style={{ ["--reach" as string]: 0.55 }} />
+                <span style={{ ["--reach" as string]: 1 }} />
+                <span style={{ ["--reach" as string]: 0.8 }} />
+                <span style={{ ["--reach" as string]: 0.45 }} />
+              </span>
+              Listening
+            </>
+          ) : (
+            "Assistant"
+          )}
+        </h2>
         <button
           type="button"
           aria-label={voice === "on" ? "Stop reading replies aloud" : "Read replies aloud"}
           title={voice === "on" ? "Replies are read aloud" : "Replies are silent"}
           aria-pressed={voice === "on"}
           onClick={() => props.onVoice(voice === "on" ? "off" : "on")}
-          className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-[scale,background-color,color] duration-150 ease-out active:scale-90 pointer-fine:hover:bg-hover pointer-fine:hover:text-foreground"
+          className={`flex size-8 items-center justify-center rounded-full transition-[scale,background-color,color] duration-150 ease-out active:scale-90 ${listening ? "text-primary-foreground/80 pointer-fine:hover:bg-primary-foreground/15 pointer-fine:hover:text-primary-foreground" : "text-muted-foreground pointer-fine:hover:bg-hover pointer-fine:hover:text-foreground"}`}
         >
           {voice === "on" ? <Volume2 aria-hidden className="size-4" /> : <VolumeX aria-hidden className="size-4" />}
         </button>
@@ -190,7 +214,7 @@ export function AssistantPanel(props: PanelProps) {
           aria-label="Close the assistant"
           title="Close"
           onClick={props.onClose}
-          className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-[scale,background-color,color] duration-150 ease-out active:scale-90 pointer-fine:hover:bg-hover pointer-fine:hover:text-foreground"
+          className={`flex size-8 items-center justify-center rounded-full transition-[scale,background-color,color] duration-150 ease-out active:scale-90 ${listening ? "text-primary-foreground/80 pointer-fine:hover:bg-primary-foreground/15 pointer-fine:hover:text-primary-foreground" : "text-muted-foreground pointer-fine:hover:bg-hover pointer-fine:hover:text-foreground"}`}
         >
           <X aria-hidden className="size-4" />
         </button>
@@ -267,7 +291,7 @@ export function AssistantPanel(props: PanelProps) {
         </div>
       )}
 
-      <footer className="shrink-0 border-t border-border px-3 pt-2.5 pb-3">
+      <footer ref={footer} className="shrink-0 border-t border-border px-3 pt-2.5 pb-3">
         <div className="mb-2 flex items-center gap-2">
           <p className={`min-w-0 flex-1 text-xs ${listenError ? "text-destructive-ink" : "text-muted-foreground"}`}>{status}</p>
           {pickLanguage && <SegmentedControl label="Language I listen for" options={LANGUAGES} value={language} onChange={props.onLanguage} className="w-60 shrink-0 [&_label]:h-7! [&_label]:text-xs!" />}
