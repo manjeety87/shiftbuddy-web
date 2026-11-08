@@ -87,7 +87,9 @@ back as a card and waits for a yes — spoken ("haan, kardo") or the card's butt
 the saved line then offers Undo. Answering the card makes it slide away at once; the reply brings the next
 card, or none. While the microphone is open the panel's header turns into a field of the accent with bars
 that follow the voice. A reply that never arrives while a card waits clears the card and refreshes every
-list (it may have saved). The conversation is kept
+list (it may have saved). The conversation is kept in this browser per account (`conversation.ts`): a reload
+or a new visit carries on for a day after the last message (last 60 lines, never a waiting card), the header's
+New conversation button starts over, and it is wiped whenever nobody is signed in (log out, expired session). The conversation is kept
 in memory in `Assistant.tsx` and sent with each turn. While a shift's panel is open the assistant
 lives inside that `<dialog>` (a modal dialog makes everything outside it inert) and shrinks to a
 pill at the top. Listening pauses while it thinks and speaks, so it never hears itself.

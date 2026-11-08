@@ -6,10 +6,12 @@ import { createPortal } from "react-dom";
 import { confirmProposal, refreshAfterLostReply, sendToAssistant, transcribeRecording, type AssistantAction, type AssistantTurn, type AssistantPage, type HistoryLine, type Proposal, type Saved } from "@/lib/assistant";
 import { clearShiftMissed } from "@/lib/missedShifts";
 import { setPreference, usePreference } from "@/lib/preferences";
+import { useUser } from "@/lib/session";
 import { closeAllSheets, openNewShift, openSheet } from "@/lib/sheets";
 import { deleteShift } from "@/lib/shifts";
 import { AssistantPanel, type Message } from "./AssistantPanel";
 import { closeAssistant, onAssistantOpenChange, useAssistantOpen } from "./assistantOpen";
+import { loadConversation, saveConversation } from "./conversation";
 import { canRecord, useRecorder } from "./recorder";
 import { speak, stopSpeaking } from "./speech";
 
@@ -65,7 +67,9 @@ export function Assistant() {
   const router = useRouter();
   const pathname = usePathname();
   const voice = usePreference("assistantVoice");
-  const [messages, setMessages] = useState<Message[]>([]);
+  const user = useUser();
+  // Carries on where they stopped (this browser, this account, the last day)
+  const [messages, setMessages] = useState<Message[]>(() => loadConversation(user.id));
   const [pending, setPending] = useState<Proposal | null>(null);
   const [phase, setPhase] = useState<"idle" | "thinking" | "speaking">("idle");
   const [handsFree, setHandsFree] = useState(false);
@@ -84,7 +88,13 @@ export function Assistant() {
   useEffect(() => {
     live.current = { messages, pending, handsFree, voice, listenError };
   });
-  const nextId = useRef(1);
+  const nextId = useRef(messages.reduce((highest, line) => Math.max(highest, line.id), 0) + 1);
+
+  useEffect(() => {
+    // A failure from an earlier visit is noise when they come back
+    saveConversation(user.id, messages.filter((line) => !line.failed));
+  }, [user.id, messages]);
+
   const add = useCallback((message: Omit<Message, "id">) => setMessages((list) => [...list, { ...message, id: nextId.current++ }]), []);
 
   const page = PAGES.find((name) => pathname.startsWith(`/${name}`));
@@ -217,6 +227,13 @@ export function Assistant() {
     setPhase((current) => (current === "speaking" ? "idle" : current));
   }, [stopListening]);
 
+  /** A clean slate: the conversation, the card and anything being said or heard */
+  const startOver = () => {
+    stopTalking();
+    setPending(null);
+    setMessages([]);
+  };
+
   // Opening by a mic button starts the conversation; closing ends listening and speech
   useEffect(
     () =>
@@ -289,6 +306,7 @@ export function Assistant() {
       onStopSpeaking={stopSpeaking}
       onSave={() => void save()}
       onDismissCard={() => setPending(null)}
+      onNewChat={startOver}
       onUndo={(message) => void undo(message)}
       onVoice={(next) => {
         if (next === "off") stopSpeaking();

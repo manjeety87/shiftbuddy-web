@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUp, Check, Maximize2, Mic, Square, Volume2, VolumeX, X } from "lucide-react";
+import { ArrowUp, Check, Maximize2, Mic, SquarePen, Square, Volume2, VolumeX, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Spinner } from "@/components/ui/Button";
 import type { Proposal, Saved } from "@/lib/assistant";
@@ -47,6 +47,7 @@ interface PanelProps {
   onStopSpeaking: () => void;
   onSave: () => void;
   onDismissCard: () => void;
+  onNewChat: () => void;
   onUndo: (message: Message) => void;
   onVoice: (voice: "on" | "off") => void;
   onClose: () => void;
@@ -207,6 +208,17 @@ export function AssistantPanel(props: PanelProps) {
             "Assistant"
           )}
         </h2>
+        {messages.length > 0 && (
+          <button
+            type="button"
+            aria-label="New conversation"
+            title="New conversation"
+            onClick={props.onNewChat}
+            className={`flex size-8 items-center justify-center rounded-full transition-[scale,background-color,color] duration-150 ease-out active:scale-90 ${listening ? "text-primary-foreground/80 pointer-fine:hover:bg-primary-foreground/15 pointer-fine:hover:text-primary-foreground" : "text-muted-foreground pointer-fine:hover:bg-hover pointer-fine:hover:text-foreground"}`}
+          >
+            <SquarePen aria-hidden className="size-4" />
+          </button>
+        )}
         <button
           type="button"
           aria-label={voice === "on" ? "Stop reading replies aloud" : "Read replies aloud"}

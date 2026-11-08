@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { Assistant } from "@/features/assistant/Assistant";
 import { openAssistant, toggleAssistant, useAssistantOpen } from "@/features/assistant/assistantOpen";
+import { forgetConversations } from "@/features/assistant/conversation";
 import { useSession } from "@/lib/session";
 import { closeAllSheets, openNewShift } from "@/lib/sheets";
 import { LoadError } from "../ui/States";
@@ -24,6 +25,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (session.status !== "anonymous") return;
     closeAllSheets();
+    // Nobody is signed in on this browser now: what they said to the assistant goes too
+    forgetConversations();
     router.replace("/login");
   }, [session.status, router]);
 
