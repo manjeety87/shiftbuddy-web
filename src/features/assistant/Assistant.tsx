@@ -11,7 +11,7 @@ import { deleteShift } from "@/lib/shifts";
 import { AssistantPanel, type Message } from "./AssistantPanel";
 import { closeAssistant, onAssistantOpenChange, useAssistantOpen } from "./assistantOpen";
 import { canRecord, useRecorder } from "./recorder";
-import { canListen, speak, stopSpeaking, useListening } from "./speech";
+import { speak, stopSpeaking } from "./speech";
 
 const PAGES: AssistantPage[] = ["home", "shifts", "calendar", "jobs", "timesheet", "sharing", "settings"];
 // Hands-free listening turns itself off after this long with nothing said and nothing waiting
@@ -64,7 +64,6 @@ export function Assistant() {
   const { open } = useAssistantOpen();
   const router = useRouter();
   const pathname = usePathname();
-  const language = usePreference("assistantLanguage");
   const voice = usePreference("assistantVoice");
   const [messages, setMessages] = useState<Message[]>([]);
   const [pending, setPending] = useState<Proposal | null>(null);
@@ -74,24 +73,16 @@ export function Assistant() {
   const [draft, setDraft] = useState("");
   const host = useSyncExternalStore(open ? subscribeToDialogs : subscribeToNothing, open ? topDialog : noDialog, noDialog);
 
-  const sendRef = useRef<(text: string) => void>(() => {});
   const sendVoiceRef = useRef<(audio: Blob) => void>(() => {});
-  // Hinglish is recorded (below); the browser's service only ever listens for English or Hindi
-  const listening = useListening({ lang: language === "hi-IN" ? "hi-IN" : "en-IN", onPhrase: (text) => sendRef.current(text) });
+  // Every browser listens the same way: a recording that ShiftBuddy writes down in the
+  // language it was spoken in (English, Hinglish or Hindi — no switch to set)
   const recorder = useRecorder({ onRecording: (audio) => sendVoiceRef.current(audio) });
-  const { start: startBrowserListening, stop: stopBrowserListening } = listening;
-  const { start: startRecording, stop: stopRecording } = recorder;
-  // The browser's speech service when it has one that works; otherwise a recording that
-  // ShiftBuddy writes down (Firefox, Brave, a Chrome that can't reach its speech service).
-  // Hinglish is always recorded: the browser hears it as nonsense English or Hindi.
-  const browserCanListen = canListen() && listening.error !== "unavailable";
-  const recorded = !browserCanListen || language === "hinglish";
-  const listenError = recorded ? recorder.error : listening.error;
+  const { start: startRecording, stop: stopListening, error: listenError, recording: hearing } = recorder;
 
   // Read inside async flows, where state from the render that started them is stale
-  const live = useRef({ messages, pending, handsFree, voice, listenError, recorded });
+  const live = useRef({ messages, pending, handsFree, voice, listenError });
   useEffect(() => {
-    live.current = { messages, pending, handsFree, voice, listenError, recorded };
+    live.current = { messages, pending, handsFree, voice, listenError };
   });
   const nextId = useRef(1);
   const add = useCallback((message: Omit<Message, "id">) => setMessages((list) => [...list, { ...message, id: nextId.current++ }]), []);
@@ -113,11 +104,7 @@ export function Assistant() {
     [router],
   );
 
-  const startListening = useCallback(() => (live.current.recorded ? void startRecording() : startBrowserListening()), [startRecording, startBrowserListening]);
-  const stopListening = useCallback(() => {
-    stopBrowserListening();
-    stopRecording();
-  }, [stopBrowserListening, stopRecording]);
+  const startListening = useCallback(() => void startRecording(), [startRecording]);
 
   /** After a reply: listening comes back on by itself in a hands-free conversation — not after a blocked microphone */
   const resume = useCallback(() => {
@@ -154,8 +141,8 @@ export function Assistant() {
   );
 
   const failTurn = useCallback(
-    (err: unknown, retry?: string) => {
-      if (isLost(err) && live.current.pending) {
+    (err: unknown, retry?: string, cardWaited = false) => {
+      if (isLost(err) && cardWaited) {
         // A "yes" whose answer got lost may have saved: the card goes (it may be done), the lists refresh
         setPending(null);
         refreshAfterLostReply();
@@ -175,12 +162,17 @@ export function Assistant() {
       const message = text.trim();
       if (!message) return;
       const history = beginTurn();
+      // The card leaves as soon as they answer it; the reply brings the next one, or none
+      const waiting = live.current.pending;
+      setPending(null);
       add({ role: "user", text: message });
       setDraft("");
       try {
-        await finishTurn(await sendToAssistant({ message, history, pending: live.current.pending, page }));
+        await finishTurn(await sendToAssistant({ message, history, pending: waiting, page }));
       } catch (err) {
-        failTurn(err, message);
+        // A refusal changed nothing, so the card comes back; a lost reply may have saved it
+        if (!isLost(err)) setPending(waiting);
+        failTurn(err, message, waiting !== null);
       }
     },
     [add, page, beginTurn, finishTurn, failTurn],
@@ -208,14 +200,8 @@ export function Assistant() {
   );
 
   useEffect(() => {
-    sendRef.current = (text) => void send(text);
     sendVoiceRef.current = (audio) => void sendVoice(audio);
-  }, [send, sendVoice]);
-
-  // The browser's speech service turned out not to work: carry on by recording, without another tap
-  useEffect(() => {
-    if (listening.error === "unavailable" && live.current.handsFree && canRecord()) void startRecording();
-  }, [listening.error, startRecording]);
+  }, [sendVoice]);
 
   const startTalking = useCallback(() => {
     stopSpeaking();
@@ -235,7 +221,7 @@ export function Assistant() {
   useEffect(
     () =>
       onAssistantOpenChange((next) => {
-        if (next.open && next.listen && (canListen() || canRecord())) startTalking();
+        if (next.open && next.listen && canRecord()) startTalking();
         if (!next.open) stopTalking();
       }),
     [startTalking, stopTalking],
@@ -243,12 +229,11 @@ export function Assistant() {
 
   // Hands-free stops after a quiet stretch with nothing waiting: a forgotten open mic
   // shouldn't keep listening to the room
-  const hearing = listening.listening || recorder.recording;
   useEffect(() => {
     if (!hearing || pending) return;
     const timer = setTimeout(stopTalking, SLEEP_AFTER_MS);
     return () => clearTimeout(timer);
-  }, [hearing, listening.interim, pending, stopTalking]);
+  }, [hearing, pending, stopTalking]);
 
   const save = async () => {
     if (!pending) return;
@@ -292,11 +277,8 @@ export function Assistant() {
       pending={pending}
       phase={phase}
       listening={hearing}
-      heard={listening.interim}
       listenError={listenError}
-      canListen={canListen() || canRecord()}
-      pickLanguage={browserCanListen}
-      language={language}
+      canListen={canRecord()}
       voice={voice}
       draft={draft}
       saving={saving}
@@ -308,7 +290,6 @@ export function Assistant() {
       onSave={() => void save()}
       onDismissCard={() => setPending(null)}
       onUndo={(message) => void undo(message)}
-      onLanguage={(next) => setPreference("assistantLanguage", next)}
       onVoice={(next) => {
         if (next === "off") stopSpeaking();
         setPreference("assistantVoice", next);

@@ -1035,6 +1035,20 @@ body {
     opacity 180ms var(--ease-out),
     translate 180ms var(--ease-out);
 }
+/* Answered: the card drops away, faster than it came, and its slot folds shut behind it */
+.assistant-card[data-leaving] {
+  opacity: 0;
+  translate: 0 14px;
+  transition-duration: 150ms;
+}
+.assistant-card-slot {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 150ms var(--ease-out);
+}
+.assistant-card-slot[data-leaving] {
+  grid-template-rows: 0fr;
+}
 @starting-style {
   .assistant-pill {
     opacity: 0;
@@ -1092,6 +1106,9 @@ body {
   .assistant-panel,
   .assistant-card {
     translate: none !important;
+  }
+  .assistant-card-slot {
+    transition: none;
   }
   /* The level still shows, as brightness instead of size */
   .mic-halo {

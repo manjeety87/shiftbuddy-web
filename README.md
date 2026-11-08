@@ -77,16 +77,17 @@ preferences (`lib/preferences.ts`: `homeView`, `sharedOnHome`); Settings → Hom
 turns the shared schedules off; the same switch is on Sharing, under "Shared with you".
 
 **The assistant** (`features/assistant/`, Ctrl/⌘ J, the sidebar's Assistant, the mic button
-above the tabs on a phone). The browser turns speech into text (Web Speech API: Chrome, Edge,
-Safari) and reads replies aloud. Where that service is missing or fails (Firefox, Brave, a Chrome
-that can't reach it) `recorder.ts` records instead — it stops after a pause, converts to 16 kHz WAV
-and sends `POST /assistant/voice`, like the phone app; `POST /assistant/messages` does the
-rest with Gemini. Every change comes back as a card and waits for a yes — spoken ("haan, kardo") or the card's
-button (`POST /assistant/confirm`); the saved line then offers Undo. Listening: English / Hinglish / हिन्दी — Hinglish is recorded and
-written down by ShiftBuddy (`POST /assistant/transcribe`, shown as theirs, then sent as a normal turn). A Hinglish
-reply is read from its `speech` (Devanagari) by a Hindi voice. While the microphone is open the panel's header turns
-into a field of the accent with bars that follow the voice. A reply that never arrives while a card waits clears the card
-and refreshes every list (it may have saved). The conversation is kept
+above the tabs on a phone). Listening is the same in every browser and has no language switch:
+`recorder.ts` records, stops after a pause, converts to 16 kHz WAV, and `POST /assistant/transcribe` writes
+it down in the language it was spoken in (English; Hinglish in Roman letters; Hindi in Devanagari). The words
+show as the person's message, then go to `POST /assistant/messages` like typed text, and the reply comes in
+the same language. Replies are read by the browser's best voice for their language (neural "Natural"/Google
+voices first); a Hinglish reply is read from its `speech` (Devanagari) by a Hindi voice. Every change comes
+back as a card and waits for a yes — spoken ("haan, kardo") or the card's button (`POST /assistant/confirm`);
+the saved line then offers Undo. Answering the card makes it slide away at once; the reply brings the next
+card, or none. While the microphone is open the panel's header turns into a field of the accent with bars
+that follow the voice. A reply that never arrives while a card waits clears the card and refreshes every
+list (it may have saved). The conversation is kept
 in memory in `Assistant.tsx` and sent with each turn. While a shift's panel is open the assistant
 lives inside that `<dialog>` (a modal dialog makes everything outside it inert) and shrinks to a
 pill at the top. Listening pauses while it thinks and speaks, so it never hears itself.

@@ -120,11 +120,11 @@ function Clash({ children }: { children: React.ReactNode }) {
  * and says yes (or taps the button). It is the page's one primary action while it
  * waits, so it sits right above the place you talk or type.
  */
-export function ProposalCard({ proposal, busy, listening, onSave, onDismiss }: { proposal: Proposal; busy: boolean; listening: boolean; onSave: () => void; onDismiss: () => void }) {
+export function ProposalCard({ proposal, busy, listening, leaving = false, onSave, onDismiss }: { proposal: Proposal; busy: boolean; listening: boolean; leaving?: boolean; onSave: () => void; onDismiss: () => void }) {
   const title = TITLES[proposal.type](proposal);
 
   return (
-    <section aria-label={title} className="assistant-card rounded-xl bg-card p-3.5 shadow-pop">
+    <section aria-label={title} aria-hidden={leaving || undefined} inert={leaving || undefined} data-leaving={leaving || undefined} className="assistant-card rounded-xl bg-card p-3.5 shadow-pop">
       <h3 className="mb-2.5 text-xs font-semibold text-muted-foreground">{title}</h3>
 
       {proposal.type === "addShifts" && (

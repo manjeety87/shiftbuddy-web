@@ -1,176 +1,38 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect } from "react";
 
-// The browser's own speech services (Web Speech API): free, no audio reaches our
-// backend. Chrome and Edge send the audio to their speech service; Safari does it
-// on the device; Firefox has no recognition at all, so the assistant is typed there.
+// The browser's own voices read the replies (free, nothing leaves the device). Listening
+// is `recorder.ts`: ShiftBuddy writes the words down, in whatever language was spoken.
 
-interface RecognitionResult {
-  isFinal: boolean;
-  0: { transcript: string };
-}
-
-interface RecognitionEvent {
-  resultIndex: number;
-  results: ArrayLike<RecognitionResult>;
-}
-
-interface Recognition {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  onresult: ((event: RecognitionEvent) => void) | null;
-  onerror: ((event: { error: string }) => void) | null;
-  onend: (() => void) | null;
-  start: () => void;
-  abort: () => void;
-}
-
-type RecognitionConstructor = new () => Recognition;
-
-const recognitionConstructor = (): RecognitionConstructor | null => {
-  if (typeof window === "undefined") return null;
-  const scope = window as unknown as { SpeechRecognition?: RecognitionConstructor; webkitSpeechRecognition?: RecognitionConstructor };
-  return scope.SpeechRecognition ?? scope.webkitSpeechRecognition ?? null;
-};
-
-export const canListen = () => recognitionConstructor() !== null;
-
-export type ListenError = "blocked" | "no-mic" | "offline" | "unavailable";
-
-// A finished phrase waits this long for a second one ("Tuesday… 9 to 5") before it is sent
-const PHRASE_GAP_MS = 650;
-// Chrome ends a session after a few silent seconds; it is restarted, but a session that
-// keeps dying at once is a broken service, not silence — stop instead of looping.
-const RESTART_DELAY_MS = 150;
-const QUICK_END_MS = 1000;
-const MAX_QUICK_ENDS = 3;
+/** Why the microphone can't be used */
+export type ListenError = "blocked" | "no-mic" | "unavailable";
 
 /**
- * Listening that stays on until stopped: Chrome's sessions end on their own after a
- * pause, so each end starts the next one. `onPhrase` gets each finished thing said;
- * `interim` is what is being heard right now, for the screen.
+ * The best voice this browser has for a language. Neural voices sound like a person
+ * (Edge's "Natural" ones, Chrome's "Google" ones); the old system voices sound like a
+ * machine, so they lose to any neural voice, whatever its region.
  */
-export function useListening({ lang, onPhrase }: { lang: string; onPhrase: (text: string) => void }) {
-  const [listening, setListening] = useState(false);
-  const [interim, setInterim] = useState("");
-  const [error, setError] = useState<ListenError | null>(null);
-  const wanted = useRef(false);
-  const recognition = useRef<Recognition | null>(null);
-  const heard = useRef("");
-  const gapTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const latestPhrase = useRef(onPhrase);
-  useEffect(() => {
-    latestPhrase.current = onPhrase;
-  });
-
-  const flush = useCallback(() => {
-    clearTimeout(gapTimer.current);
-    const text = heard.current.trim();
-    heard.current = "";
-    setInterim("");
-    if (text) latestPhrase.current(text);
-  }, []);
-
-  const stop = useCallback(() => {
-    wanted.current = false;
-    clearTimeout(gapTimer.current);
-    heard.current = "";
-    setInterim("");
-    setListening(false);
-    recognition.current?.abort();
-    recognition.current = null;
-  }, []);
-
-  const start = useCallback(() => {
-    const Constructor = recognitionConstructor();
-    if (!Constructor) {
-      setError("unavailable");
-      return;
-    }
-    recognition.current?.abort();
-    wanted.current = true;
-    setError(null);
-    let quickEnds = 0;
-
-    const open = () => {
-      const session = new Constructor();
-      const openedAt = Date.now();
-      session.lang = lang;
-      session.continuous = true;
-      session.interimResults = true;
-      session.onresult = (event) => {
-        let live = "";
-        for (let index = event.resultIndex; index < event.results.length; index++) {
-          const result = event.results[index];
-          if (result.isFinal) heard.current = `${heard.current} ${result[0].transcript}`;
-          else live += result[0].transcript;
-        }
-        setInterim(`${heard.current} ${live}`.trim());
-        clearTimeout(gapTimer.current);
-        // Only a finished phrase with nothing more coming is sent
-        if (!live.trim() && heard.current.trim()) gapTimer.current = setTimeout(flush, PHRASE_GAP_MS);
-      };
-      session.onerror = ({ error: code }) => {
-        // "no-speech" and "aborted" are ordinary: silence, or our own stop
-        if (code === "not-allowed" || code === "service-not-allowed") setError("blocked");
-        else if (code === "audio-capture") setError("no-mic");
-        // Online and still "network": the browser has the API but no speech service behind it (Brave)
-        else if (code === "network") setError(navigator.onLine ? "unavailable" : "offline");
-        else return;
-        wanted.current = false;
-      };
-      session.onend = () => {
-        if (recognition.current !== session) return;
-        if (!wanted.current) {
-          setListening(false);
-          return;
-        }
-        quickEnds = Date.now() - openedAt < QUICK_END_MS ? quickEnds + 1 : 0;
-        if (quickEnds >= MAX_QUICK_ENDS) {
-          wanted.current = false;
-          setError("unavailable");
-          setListening(false);
-          return;
-        }
-        setTimeout(() => {
-          if (wanted.current && recognition.current === session) open();
-        }, RESTART_DELAY_MS);
-      };
-      recognition.current = session;
-      try {
-        session.start();
-        setListening(true);
-      } catch {
-        // start() throws if a session is somehow still running; the next end retries
-      }
-    };
-    open();
-  }, [lang, flush]);
-
-  // A new language takes effect on the next session
-  useEffect(() => {
-    if (!wanted.current) return;
-    start();
-  }, [lang, start]);
-
-  useEffect(() => stop, [stop]);
-
-  return { listening, interim, error, start, stop };
-}
-
-// ---------------------------------------------------------------------------
-
 const voiceFor = (lang: string) => {
-  const voices = window.speechSynthesis.getVoices();
   const base = lang.split("-")[0];
-  return voices.find((voice) => voice.lang === lang) ?? voices.find((voice) => voice.lang.replace("_", "-").startsWith(base)) ?? null;
+  const score = (voice: SpeechSynthesisVoice) => {
+    const voiceLang = voice.lang.replace("_", "-");
+    if (!voiceLang.startsWith(base)) return -1;
+    let points = 0;
+    if (/natural|neural/i.test(voice.name)) points += 4;
+    if (/google/i.test(voice.name)) points += 3;
+    if (!voice.localService) points += 1;
+    if (voiceLang === lang) points += 2;
+    return points;
+  };
+  let best: SpeechSynthesisVoice | null = null;
+  for (const voice of window.speechSynthesis.getVoices()) if (score(voice) >= 0 && (!best || score(voice) > score(best))) best = voice;
+  return best;
 };
 
 export const canSpeak = () => typeof window !== "undefined" && "speechSynthesis" in window;
 
-/** Devanagari is read by a Hindi voice; English and Hinglish in Roman letters by an Indian-English one. */
+/** Devanagari (Hindi, and Hinglish replies' `speech`) is read by a Hindi voice; everything else by an English one. */
 export const voiceLanguageOf = (text: string) => (/[ऀ-ॿ]/.test(text) ? "hi-IN" : "en-IN");
 
 // Chrome loads its voice list after the page; asking once early has it ready

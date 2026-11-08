@@ -3,9 +3,7 @@
 import { ArrowUp, Check, Maximize2, Mic, Square, Volume2, VolumeX, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Spinner } from "@/components/ui/Button";
-import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import type { Proposal, Saved } from "@/lib/assistant";
-import type { AssistantLanguage } from "@/lib/preferences";
 import { ProposalCard } from "./ProposalCard";
 import { useMicLevel, type ListenError } from "./speech";
 
@@ -26,16 +24,9 @@ type Phase = "idle" | "thinking" | "speaking";
 // Ways in, in the voices people actually use: plain English, Hinglish, a question, a place
 const EXAMPLES = ["Add a shift tomorrow, 9 to 5", "Kal 9 se 5 ki shift hai", "Wednesday ko nahi ja paunga", "When is my next shift?", "Show my calendar"];
 
-const LANGUAGES = [
-  { value: "en-IN", label: "English" },
-  { value: "hinglish", label: "Hinglish" },
-  { value: "hi-IN", label: "हिन्दी" },
-] as const;
-
 const LISTEN_ERRORS: Record<ListenError, string> = {
   blocked: "The microphone is blocked. Allow it from the address bar, or type instead.",
   "no-mic": "No microphone found. Type instead.",
-  offline: "Listening needs an internet connection. Type instead.",
   unavailable: "This browser can’t use the microphone. Type instead.",
 };
 
@@ -45,12 +36,8 @@ interface PanelProps {
   pending: Proposal | null;
   phase: Phase;
   listening: boolean;
-  heard: string;
   listenError: ListenError | null;
   canListen: boolean;
-  /** English / Hinglish / Hindi — only while the browser's speech service works; without it everything is recorded */
-  pickLanguage: boolean;
-  language: AssistantLanguage;
   voice: "on" | "off";
   draft: string;
   saving: boolean;
@@ -61,9 +48,28 @@ interface PanelProps {
   onSave: () => void;
   onDismissCard: () => void;
   onUndo: (message: Message) => void;
-  onLanguage: (language: AssistantLanguage) => void;
   onVoice: (voice: "on" | "off") => void;
   onClose: () => void;
+}
+
+// Leaving is quicker than arriving (180 ms): the person has already moved on
+const CARD_EXIT_MS = 150;
+
+/**
+ * The card on screen, which stays a moment after `pending` goes so it can slide away
+ * instead of vanishing. A new card replaces it at once and slides in (a new `key`).
+ */
+function useLeavingCard(pending: Proposal | null) {
+  const [shown, setShown] = useState(pending);
+  // A new card arrives: show it now (adjusted while rendering, not in an effect)
+  if (pending !== null && pending !== shown) setShown(pending);
+  const leaving = pending === null && shown !== null;
+  useEffect(() => {
+    if (!leaving) return;
+    const timer = setTimeout(() => setShown(null), CARD_EXIT_MS);
+    return () => clearTimeout(timer);
+  }, [leaving]);
+  return { shown, leaving, key: shown ? `${shown.type}:${JSON.stringify(shown.preview)}` : "" };
 }
 
 /**
@@ -102,7 +108,7 @@ function MicButton({ phase, listening, disabled, onMic, onStopSpeaking, size = "
  * the top so the panel stays readable — and keeps listening.
  */
 export function AssistantPanel(props: PanelProps) {
-  const { overDialog, messages, pending, phase, listening, heard, listenError, canListen, pickLanguage, language, voice, draft, saving } = props;
+  const { overDialog, messages, pending, phase, listening, listenError, canListen, voice, draft, saving } = props;
   const [expanded, setExpanded] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   // The voice level goes to the parts that move with it: the header's bars and the mic (or the pill)
@@ -114,10 +120,12 @@ export function AssistantPanel(props: PanelProps) {
   useMicLevel(listening, levelTargets);
   const input = useRef<HTMLInputElement>(null);
 
-  // The newest line, what's being heard, and the card stay in view
+  const card = useLeavingCard(pending);
+
+  // The newest line and the card stay in view (and again once a card has gone)
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
-  }, [messages.length, heard, phase, pending]);
+  }, [messages.length, phase, card.shown]);
 
   // Opened to type (not by a mic): the cursor is ready
   useEffect(() => {
@@ -158,7 +166,7 @@ export function AssistantPanel(props: PanelProps) {
       <div ref={pill} role="region" aria-label="Assistant" onKeyDown={onKeyDown} className="assistant-pill frosted fixed top-3 left-1/2 z-50 flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-2 rounded-full bg-card/85 py-1.5 pr-1.5 pl-1.5 shadow-pop backdrop-blur-xl backdrop-saturate-150">
         {canListen && <MicButton size="sm" phase={phase} listening={listening} disabled={false} onMic={props.onMic} onStopSpeaking={props.onStopSpeaking} />}
         <p aria-live="polite" className="max-w-80 min-w-0 truncate text-sm">
-          {pending ? (listening ? "A card is waiting — say “yes”, or open it" : "A card is waiting") : heard || (phase === "idle" && lastReply ? lastReply.text : status)}
+          {pending ? (listening ? "A card is waiting — say “yes”, or open it" : "A card is waiting") : phase === "idle" && lastReply ? lastReply.text : status}
         </p>
         <button type="button" aria-label="Open the assistant" title="Open the assistant" onClick={() => setExpanded(true)} className="flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-[scale,background-color] duration-150 ease-out active:scale-90 pointer-fine:hover:bg-hover">
           <Maximize2 aria-hidden className="size-3.5" />
@@ -224,7 +232,7 @@ export function AssistantPanel(props: PanelProps) {
         {messages.length === 0 ? (
           <div>
             <p className="text-lg font-semibold tracking-tight">Tell me about your shifts.</p>
-            <p className="mt-1 text-sm text-muted-foreground">Add one, say you can’t make it, add the hours you worked, or ask me to open something. English or Hinglish, however you talk.</p>
+            <p className="mt-1 text-sm text-muted-foreground">Add one, say you can’t make it, add the hours you worked, or ask me to open something. English, Hinglish or Hindi — however you talk, it answers the same way.</p>
             <ul className="mt-4 flex flex-wrap gap-1.5">
               {EXAMPLES.map((example) => (
                 <li key={example}>
@@ -275,7 +283,6 @@ export function AssistantPanel(props: PanelProps) {
             )}
           </ol>
         )}
-        {heard && <p className="mt-3 text-right text-sm text-muted-foreground italic">{heard}</p>}
         {phase === "thinking" && (
           <p role="status" className="assistant-thinking mt-3 flex gap-1" aria-label="Thinking">
             <span className="size-1.5 rounded-full bg-faint" />
@@ -285,16 +292,20 @@ export function AssistantPanel(props: PanelProps) {
         )}
       </div>
 
-      {pending && (
-        <div className="shrink-0 px-3 pb-2">
-          <ProposalCard proposal={pending} busy={saving} listening={listening} onSave={props.onSave} onDismiss={props.onDismissCard} />
+      {card.shown && (
+        // The slot folds away under a card that is leaving, so the conversation takes the room back
+        <div className="assistant-card-slot shrink-0" data-leaving={card.leaving || undefined}>
+          <div className="min-h-0 overflow-hidden">
+            <div className="px-3 pb-2">
+              <ProposalCard key={card.key} proposal={card.shown} busy={saving} listening={listening} leaving={card.leaving} onSave={props.onSave} onDismiss={props.onDismissCard} />
+            </div>
+          </div>
         </div>
       )}
 
       <footer ref={footer} className="shrink-0 border-t border-border px-3 pt-2.5 pb-3">
         <div className="mb-2 flex items-center gap-2">
           <p className={`min-w-0 flex-1 text-xs ${listenError ? "text-destructive-ink" : "text-muted-foreground"}`}>{status}</p>
-          {pickLanguage && <SegmentedControl label="Language I listen for" options={LANGUAGES} value={language} onChange={props.onLanguage} className="w-60 shrink-0 [&_label]:h-7! [&_label]:text-xs!" />}
         </div>
         <form onSubmit={submit} className="flex items-center gap-2">
           <label className="sr-only" htmlFor="assistant-input">

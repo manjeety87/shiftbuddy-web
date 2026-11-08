@@ -6,8 +6,6 @@ import { useSyncExternalStore } from "react";
 // localStorage (like the theme), so a shared computer and a phone can differ.
 // Which parts of the app are on is account data (lib/features.ts).
 
-export type AssistantLanguage = "en-IN" | "hinglish" | "hi-IN";
-
 const DEFAULTS = {
   /** Home's calendar: one week as columns, or the whole month */
   homeView: "week" as "week" | "month",
@@ -15,12 +13,6 @@ const DEFAULTS = {
   welcomeSeen: "no" as "no" | "yes",
   /** Home's "Getting started" checklist, until it's done or hidden */
   gettingStarted: "shown" as "shown" | "hidden",
-  /**
-   * What the assistant listens for. English and Hindi use the browser's speech service;
-   * Hinglish records and lets ShiftBuddy write it down, because the browser hears
-   * mixed Hindi-English as nonsense in either language.
-   */
-  assistantLanguage: "en-IN" as AssistantLanguage,
   /** Whether the assistant reads its replies aloud */
   assistantVoice: "on" as "on" | "off",
 };
@@ -38,7 +30,6 @@ const read = <K extends Key>(key: K): Preferences[K] => {
     if (key === "homeView" && (saved === "week" || saved === "month")) return saved as Preferences[K];
     if (key === "welcomeSeen" && (saved === "no" || saved === "yes")) return saved as Preferences[K];
     if (key === "gettingStarted" && (saved === "shown" || saved === "hidden")) return saved as Preferences[K];
-    if (key === "assistantLanguage" && (saved === "en-IN" || saved === "hinglish" || saved === "hi-IN")) return saved as Preferences[K];
     if (key === "assistantVoice" && (saved === "on" || saved === "off")) return saved as Preferences[K];
   } catch {
     // Storage blocked (private window): the defaults apply
