@@ -1,6 +1,7 @@
-// The assistant, end to end: speaking (a stand-in for the browser's speech service,
-// which a test browser can't reach), the card and a spoken yes, Undo, opening places
-// and a shift's panel, typing, the Save button, a phone, and a browser that can't listen.
+// The assistant, end to end: speaking (a stand-in microphone and recorder — a test
+// browser has no voice — and scripted transcriptions), the card and a spoken yes, Undo,
+// the one-time "remember our chats?", opening places and a shift's panel, typing, the
+// Save button, a phone, and a browser that can't record.
 //   node e2e/assistant.mjs            (expects the site on http://localhost:3210)
 // What Gemini would answer is scripted, so the check doesn't depend on a free quota;
 // a plain spoken "haan" still goes to the real backend (it needs no model), and so do
@@ -20,27 +21,58 @@ const check = (name, ok, info = "") => {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${ok || !info ? "" : `  → ${info}`}`);
 };
 
-// Speech in, speech out: recognition that hears what the test "says", and a voice that
-// records what it was asked to read. Everything else (the page, the backend) is real.
-const fakeSpeech = () => {
-  class FakeRecognition {
+// Speech in, speech out: a microphone that goes loud while the test "speaks" (so the
+// recorder hears speech, then the pause that ends it), a recorder that hands over a
+// short silent WAV, and a voice that records what it was asked to read. The words come
+// from /assistant/transcribe, scripted below. Everything else (the page, the backend) is real.
+const fakeVoice = () => {
+  window.__speaking = false;
+  AnalyserNode.prototype.getFloatTimeDomainData = function (samples) {
+    const level = window.__speaking ? 0.3 : 0.0005;
+    for (let index = 0; index < samples.length; index++) samples[index] = index % 2 ? level : -level;
+  };
+  const silentWav = () => {
+    const samples = 8000;
+    const view = new DataView(new ArrayBuffer(44 + samples * 2));
+    const text = (offset, value) => [...value].forEach((char, index) => view.setUint8(offset + index, char.charCodeAt(0)));
+    text(0, "RIFF");
+    view.setUint32(4, 36 + samples * 2, true);
+    text(8, "WAVE");
+    text(12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, 16000, true);
+    view.setUint32(28, 32000, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    text(36, "data");
+    view.setUint32(40, samples * 2, true);
+    return view;
+  };
+  window.MediaRecorder = class {
+    constructor() {
+      this.state = "inactive";
+      this.mimeType = "audio/wav";
+    }
     start() {
-      window.__recognition = this;
+      this.state = "recording";
+      window.__recorder = this;
       window.__listening = true;
-      window.__lang = this.lang;
     }
-    abort() {
-      if (window.__recognition === this) window.__listening = false;
-      setTimeout(() => this.onend?.(), 0);
+    stop() {
+      this.state = "inactive";
+      if (window.__recorder === this) window.__listening = false;
+      setTimeout(() => {
+        this.ondataavailable?.({ data: new Blob([silentWav()], { type: "audio/wav" }) });
+        this.onstop?.();
+      }, 0);
     }
-  }
-  window.SpeechRecognition = FakeRecognition;
-  window.webkitSpeechRecognition = FakeRecognition;
-  window.__say = (text) => {
-    const session = window.__recognition;
-    const words = text.split(" ");
-    session.onresult?.({ resultIndex: 0, results: [{ isFinal: false, 0: { transcript: words.slice(0, Math.ceil(words.length / 2)).join(" ") } }] });
-    setTimeout(() => session.onresult?.({ resultIndex: 0, results: [{ isFinal: true, 0: { transcript: text } }] }), 150);
+  };
+  // Loud for a moment, then quiet: the recorder sends it after the pause
+  window.__speak = () => {
+    window.__speaking = true;
+    setTimeout(() => (window.__speaking = false), 700);
   };
   window.__spoken = [];
   Object.defineProperty(window, "speechSynthesis", {
@@ -60,6 +92,11 @@ const fakeSpeech = () => {
   };
 };
 
+/** What /assistant/transcribe "heard", in the order the test says it */
+const heard = [];
+const scriptHearing = (target) =>
+  target.route("**/api/assistant/transcribe", (route) => route.fulfill({ json: { statusCode: 200, success: true, message: "Heard", data: { heard: heard.shift() ?? "" } } }));
+
 const browser = await chromium.launch({ args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] });
 const problems = [];
 const watch = (page) => {
@@ -71,7 +108,8 @@ const watch = (page) => {
 };
 
 const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, permissions: ["microphone"] });
-await context.addInitScript(fakeSpeech);
+await context.addInitScript(fakeVoice);
+await scriptHearing(context);
 const page = await context.newPage();
 watch(page);
 
@@ -81,7 +119,8 @@ const shot = async (name, target = page) => SHOTS && target.screenshot({ path: `
 const say = async (text, target = page) => {
   await target.waitForFunction(() => window.__listening === true, null, { timeout: REPLY_MS });
   const before = await target.evaluate(() => window.__spoken.length);
-  await target.evaluate((words) => window.__say(words), text);
+  heard.push(text);
+  await target.evaluate(() => window.__speak());
   await target.waitForFunction((count) => window.__spoken.length > count, before, { timeout: REPLY_MS });
   return target.evaluate(() => window.__spoken.at(-1));
 };
@@ -172,8 +211,10 @@ try {
   });
 
   await step("a spoken “haan sahi hai add kardo” saves it, the card goes, Undo is offered", async () => {
+    // Shown in Roman letters, the way it was said; read aloud from Devanagari by a Hindi voice
     const reply = await say("haan sahi hai add kardo");
-    if (!/ho gaya/i.test(reply)) throw new Error(`reply: ${reply}`);
+    if (!/हो गया/.test(reply)) throw new Error(`read aloud: ${reply}`);
+    await panel().getByText(/Ho gaya, shift add kar di/i).waitFor();
     await panel().getByRole("region", { name: "New shift" }).waitFor({ state: "detached" });
     await panel().getByRole("button", { name: "Undo" }).waitFor();
     if ((await api("get", "/shifts")).length !== 2) throw new Error("the shift was not saved");
@@ -184,6 +225,20 @@ try {
     await panel().getByRole("button", { name: "Undo" }).click();
     await panel().getByText("Undone").waitFor();
     if ((await api("get", "/shifts")).length !== 1) throw new Error("the shift is still there");
+  });
+
+  await step("asked once whether to remember chats; Remember keeps this conversation on the account", async () => {
+    const question = panel().getByRole("group", { name: "Remember our chats?" });
+    await question.waitFor();
+    await shot("ai-remember");
+    await question.getByRole("button", { name: "Remember" }).click();
+    await question.waitFor({ state: "detached" });
+    for (const started = Date.now(); ; ) {
+      const memory = await api("get", "/assistant/memory");
+      if (memory.remember && memory.messages.length >= 3) break;
+      if (Date.now() - started > 10000) throw new Error(`kept ${memory.messages.length} lines, remember ${memory.remember}`);
+      await page.waitForTimeout(300);
+    }
   });
 
   await step("“show me the calendar” goes to Calendar", async () => {
@@ -259,20 +314,19 @@ try {
     if (!(await api("get", "/shifts")).some((shift) => shift.startTime === later.startTime)) throw new Error("not back");
   });
 
-  await step("replies can be silenced, and the language choice is kept", async () => {
+  await step("replies can be silenced (kept), and there's no language to pick — it follows what was said", async () => {
     await panel().getByRole("button", { name: "Stop reading replies aloud" }).click();
-    await panel().getByRole("radio", { name: "हिन्दी" }).check({ force: true });
-    const saved = await page.evaluate(() => [localStorage.getItem("shiftbuddy.assistantVoice"), localStorage.getItem("shiftbuddy.assistantLanguage")]);
-    if (saved.join() !== "off,hi-IN") throw new Error(saved.join());
+    if ((await page.evaluate(() => localStorage.getItem("shiftbuddy.assistantVoice"))) !== "off") throw new Error("not kept");
+    if (await panel().getByRole("radio", { name: "हिन्दी" }).count()) throw new Error("a language switch is back");
     await panel().getByRole("button", { name: "Read replies aloud" }).click();
-    await panel().getByRole("radio", { name: "English" }).check({ force: true });
   });
 
   await step("a failing service shows why, offers Try again, and stops listening", async () => {
     if (LIVE) return;
     await panel().getByRole("button", { name: "Talk" }).click();
     await page.waitForFunction(() => window.__listening === true);
-    await page.evaluate(() => window.__say("fail please"));
+    heard.push("fail please");
+    await page.evaluate(() => window.__speak());
     await panel().getByText("The assistant is busy right now — try again in a moment").waitFor();
     await panel().getByRole("button", { name: "Try again" }).waitFor();
     await panel().getByText("Tap the mic and talk, or type.").waitFor();
@@ -289,7 +343,8 @@ try {
   await step("phone: a mic button above the tabs opens it, and nothing runs off the screen", async () => {
     const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, permissions: ["microphone"] });
     await signIn(phone);
-    await phone.addInitScript(fakeSpeech);
+    await phone.addInitScript(fakeVoice);
+    await scriptHearing(phone);
     await scriptGemini(phone);
     await phone.addInitScript(() => localStorage.setItem("shiftbuddy.welcomeSeen", "yes"));
     const small = await phone.newPage();
@@ -307,21 +362,20 @@ try {
     await phone.close();
   });
 
-  await step("a browser that can't listen: no mic, and it says to type", async () => {
+  await step("a browser that can't record: no mic, and it says to type", async () => {
     const plain = await browser.newContext({ viewport: { width: 1280, height: 900 } });
     await signIn(plain);
     await plain.addInitScript(() => {
       localStorage.setItem("shiftbuddy.welcomeSeen", "yes");
-      // Like Firefox: no recognition at all
-      delete window.webkitSpeechRecognition;
-      delete window.SpeechRecognition;
+      // An old browser: no way to record at all
+      delete window.MediaRecorder;
     });
     const other = await plain.newPage();
     watch(other);
     await other.goto(`${BASE}/home`);
     await other.getByRole("button", { name: "Assistant" }).click();
     const region = other.getByRole("region", { name: "Assistant" });
-    await region.getByText(/This browser can’t listen/).waitFor();
+    await region.getByText(/This browser can’t use the microphone/).waitFor();
     if (await region.getByRole("button", { name: "Talk" }).count()) throw new Error("a mic button that can't work");
     await shot("ai7-no-voice", other);
     await plain.close();
