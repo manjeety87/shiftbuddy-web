@@ -3,21 +3,22 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { confirmProposal, refreshAfterLostReply, sendToAssistant, transcribeRecording, type AssistantAction, type AssistantTurn, type AssistantPage, type HistoryLine, type Proposal, type Saved } from "@/lib/assistant";
+import { confirmProposal, getAssistantMemory, keepConversation, refreshAfterLostReply, sendToAssistant, transcribeRecording, type AssistantAction, type AssistantTurn, type AssistantPage, type HistoryLine, type KeptLine, type Proposal, type Saved } from "@/lib/assistant";
 import { clearShiftMissed } from "@/lib/missedShifts";
 import { setPreference, usePreference } from "@/lib/preferences";
-import { useUser } from "@/lib/session";
 import { closeAllSheets, openNewShift, openSheet } from "@/lib/sheets";
 import { deleteShift } from "@/lib/shifts";
 import { AssistantPanel, type Message } from "./AssistantPanel";
+import { useFeatureToggle } from "@/components/FeatureSwitches";
 import { closeAssistant, onAssistantOpenChange, useAssistantOpen } from "./assistantOpen";
-import { loadConversation, saveConversation } from "./conversation";
 import { canRecord, useRecorder } from "./recorder";
 import { speak, stopSpeaking } from "./speech";
 
 const PAGES: AssistantPage[] = ["home", "shifts", "calendar", "jobs", "timesheet", "sharing", "settings"];
 // Hands-free listening turns itself off after this long with nothing said and nothing waiting
 const SLEEP_AFTER_MS = 30_000;
+// The kept conversation is written once things settle, not on every line of a reply
+const KEEP_DELAY_MS = 1500;
 
 type RequestError = { response?: { data?: { message?: string } | null } };
 const errorText = (err: unknown) => (err as RequestError).response?.data?.message ?? "Couldn’t reach ShiftBuddy. Check your connection and try again.";
@@ -67,9 +68,11 @@ export function Assistant() {
   const router = useRouter();
   const pathname = usePathname();
   const voice = usePreference("assistantVoice");
-  const user = useUser();
-  // Carries on where they stopped (this browser, this account, the last day)
-  const [messages, setMessages] = useState<Message[]>(() => loadConversation(user.id));
+  const { features, toggle: setFeature } = useFeatureToggle();
+  const remember = features.rememberChats;
+  const [messages, setMessages] = useState<Message[]>([]);
+  // What the account keeps: loaded once, and whether they ever chose (asked once if not)
+  const [memory, setMemory] = useState({ loaded: false, decided: true });
   const [pending, setPending] = useState<Proposal | null>(null);
   const [phase, setPhase] = useState<"idle" | "thinking" | "speaking">("idle");
   const [handsFree, setHandsFree] = useState(false);
@@ -88,14 +91,47 @@ export function Assistant() {
   useEffect(() => {
     live.current = { messages, pending, handsFree, voice, listenError };
   });
-  const nextId = useRef(messages.reduce((highest, line) => Math.max(highest, line.id), 0) + 1);
+  // Ids follow the last line, so lines carried over from another visit never collide
+  const add = useCallback((message: Omit<Message, "id">) => setMessages((list) => [...list, { ...message, id: (list.at(-1)?.id ?? 0) + 1 }]), []);
+
+  // Carry on where they stopped, when they keep chats (on the account: any device)
+  useEffect(() => {
+    let cancelled = false;
+    getAssistantMemory()
+      .then((kept) => {
+        if (cancelled) return;
+        // Only into an empty conversation: never over what was said since it opened
+        if (kept.messages.length > 0) setMessages((current) => (current.length > 0 ? current : kept.messages));
+        setMemory({ loaded: true, decided: kept.decided });
+      })
+      .catch(() => {
+        // Can't reach it now: carry on without, and don't ask
+        if (!cancelled) setMemory({ loaded: true, decided: true });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
-    // A failure from an earlier visit is noise when they come back
-    saveConversation(user.id, messages.filter((line) => !line.failed));
-  }, [user.id, messages]);
+    if (!remember || !memory.loaded) return;
+    const timer = setTimeout(() => {
+      // A failure is noise on another day; the card and errors are never kept
+      const lines: KeptLine[] = messages.filter((line) => !line.failed).map(({ id, role, text, saved, undone }) => ({ id, role, text, saved, undone }));
+      keepConversation(lines).catch(() => {
+        // Not kept this time; the next line tries again
+      });
+    }, KEEP_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [remember, memory.loaded, messages]);
 
-  const add = useCallback((message: Omit<Message, "id">) => setMessages((list) => [...list, { ...message, id: nextId.current++ }]), []);
+  /** The one-time question's answer, which is the feature itself (Settings › Features) */
+  const chooseMemory = (keep: boolean) => {
+    setMemory((current) => ({ ...current, decided: true }));
+    void setFeature("rememberChats", keep);
+  };
+  const askToRemember = memory.loaded && !memory.decided && messages.some((line) => line.role === "assistant" && !line.failed);
+
 
   const page = PAGES.find((name) => pathname.startsWith(`/${name}`));
 
@@ -307,6 +343,8 @@ export function Assistant() {
       onSave={() => void save()}
       onDismissCard={() => setPending(null)}
       onNewChat={startOver}
+      askToRemember={askToRemember}
+      onRemember={chooseMemory}
       onUndo={(message) => void undo(message)}
       onVoice={(next) => {
         if (next === "off") stopSpeaking();

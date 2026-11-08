@@ -18,6 +18,8 @@ export interface Features {
     calendarSummary: boolean;
     /** With the timesheet on: a finished shift's scheduled hours are added by themselves */
     autoHours: boolean;
+    /** The assistant keeps the conversation and its notes on the account (off by default) */
+    rememberChats: boolean;
 }
 
 export type FeatureKey = keyof Features;

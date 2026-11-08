@@ -13,12 +13,13 @@ import { Switch } from "@/components/ui/Switch";
 import { errorMessage } from "@/lib/api";
 import { sendVerificationCode, updateProfile } from "@/lib/auth";
 import { ARRIVAL_BUFFER_OPTIONS, arrivalBufferChoice, describeArriveByExample, type ArrivalBufferChoice } from "@/lib/commute";
-import { CALENDAR_FEATURES, EXTRA_FEATURES, featuresOf } from "@/lib/features";
+import { ASSISTANT_FEATURES, CALENDAR_FEATURES, EXTRA_FEATURES, featuresOf } from "@/lib/features";
 import { splitAddress } from "@/lib/geocode";
 import { notify } from "@/lib/notify";
 import { setPreference, useIsWide, usePreference } from "@/lib/preferences";
 import { useLogOut, useSession, useUser } from "@/lib/session";
 import { openSheet, type SheetRequest } from "@/lib/sheets";
+import { AssistantMemory } from "./AssistantMemory";
 import { SignedInDevices } from "./SignedInDevices";
 
 const COMMUTE_MODES = [
@@ -257,6 +258,9 @@ export function SettingsPage() {
             <FeatureSwitches items={EXTRA_FEATURES} />
             <GroupLabel>Calendar</GroupLabel>
             <FeatureSwitches items={CALENDAR_FEATURES} />
+            <GroupLabel>Assistant</GroupLabel>
+            <FeatureSwitches items={ASSISTANT_FEATURES} />
+            {features.rememberChats && <AssistantMemory />}
             <GroupLabel>Help</GroupLabel>
             <Setting label="Getting started guide" help="The setup checklist on Home. Saved on this browser.">
               <Switch label="Show the getting started guide on Home" checked={showGuide} onChange={(checked) => setPreference("gettingStarted", checked ? "shown" : "hidden")} />

@@ -28,6 +28,15 @@ export const CALENDAR_FEATURES: FeatureInfo[] = [
     { key: 'calendarSummary', title: 'Hours card', detail: 'Shifts and hours for the week or month, with the calendar.' },
 ];
 
+/** What the assistant may keep between conversations */
+export const ASSISTANT_FEATURES: FeatureInfo[] = [
+    {
+        key: 'rememberChats',
+        title: 'Remember assistant chats',
+        detail: 'Carry on where you stopped, on the web and your phone, and let the assistant keep short notes (like “INC = International Clothiers”) so you don’t repeat yourself. Kept 30 days after your last message; switching this off deletes them.',
+    },
+];
+
 /** The app itself — always there, listed so people know what they already have */
 export const CORE_FEATURES = [
     { title: 'Every job, one calendar', detail: 'Type your shifts or scan a photo of the schedule.' },
@@ -37,7 +46,7 @@ export const CORE_FEATURES = [
 
 // A user saved on the phone before features existed has none: show everything
 // until the next refresh brings the real ones, rather than hide what they use.
-const EVERYTHING_ON: Features = { leaveBy: true, weather: true, timesheet: true, pay: true, sharedOnHome: true, calendarSummary: true, autoHours: false };
+const EVERYTHING_ON: Features = { leaveBy: true, weather: true, timesheet: true, pay: true, sharedOnHome: true, calendarSummary: true, autoHours: false, rememberChats: false };
 
 export const featuresOf = (user: User | null | undefined): Features => user?.features ?? EVERYTHING_ON;
 

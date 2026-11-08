@@ -2,7 +2,7 @@
 
 import { ArrowUp, Check, Maximize2, Mic, SquarePen, Square, Volume2, VolumeX, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import { Spinner } from "@/components/ui/Button";
+import { Button, Spinner } from "@/components/ui/Button";
 import type { Proposal, Saved } from "@/lib/assistant";
 import { ProposalCard } from "./ProposalCard";
 import { useMicLevel, type ListenError } from "./speech";
@@ -48,6 +48,9 @@ interface PanelProps {
   onSave: () => void;
   onDismissCard: () => void;
   onNewChat: () => void;
+  /** Ask once whether to keep chats (the Remember assistant chats feature) */
+  askToRemember: boolean;
+  onRemember: (keep: boolean) => void;
   onUndo: (message: Message) => void;
   onVoice: (voice: "on" | "off") => void;
   onClose: () => void;
@@ -294,6 +297,23 @@ export function AssistantPanel(props: PanelProps) {
               ),
             )}
           </ol>
+        )}
+        {props.askToRemember && phase === "idle" && (
+          // Asked once, after the first answer — when they've seen what there would be to keep
+          <div role="group" aria-label="Remember our chats?" className="assistant-card mt-4 rounded-xl bg-card p-3.5 shadow-card">
+            <p className="text-sm font-semibold">Remember our chats next time?</p>
+            <p className="mt-1 text-xs text-pretty text-muted-foreground">
+              I’d carry on where you stopped, on the web and your phone, and keep short notes so you needn’t repeat yourself. Kept 30 days after your last message; change it any time in Settings › Features.
+            </p>
+            <div className="mt-3 flex justify-end gap-2">
+              <Button variant="quiet" size="sm" onClick={() => props.onRemember(false)}>
+                Not now
+              </Button>
+              <Button size="sm" onClick={() => props.onRemember(true)}>
+                Remember
+              </Button>
+            </div>
+          </div>
         )}
         {phase === "thinking" && (
           <p role="status" className="assistant-thinking mt-3 flex gap-1" aria-label="Thinking">

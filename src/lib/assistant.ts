@@ -131,6 +131,52 @@ export const refreshAfterLostReply = () => {
     emitTimesheetChanged();
 };
 
+/** A conversation line as the account keeps it (Remember assistant chats) */
+export interface KeptLine {
+    id: number;
+    role: 'user' | 'assistant';
+    text: string;
+    saved?: Saved;
+    undone?: boolean;
+}
+
+export interface AssistantNote {
+    id: string;
+    text: string;
+    createdAt: string;
+}
+
+export interface AssistantMemory {
+    /** The Remember assistant chats feature */
+    remember: boolean;
+    /** Whether they ever chose — the assistant asks once */
+    decided: boolean;
+    messages: KeptLine[];
+    notes: AssistantNote[];
+}
+
+/** Lines the account keeps (the backend's limit) */
+export const MAX_KEPT_LINES = 100;
+
+export const getAssistantMemory = async (): Promise<AssistantMemory> => {
+    const { data } = await api.get<{ data: AssistantMemory }>('/assistant/memory');
+    return data.data;
+};
+
+/** Replaces the kept conversation (an empty one deletes it). Refused (409) while the feature is off. */
+export const keepConversation = async (messages: KeptLine[]) => {
+    await api.put('/assistant/memory/conversation', { messages: messages.slice(-MAX_KEPT_LINES) });
+};
+
+/** Every kept line and note goes */
+export const forgetAssistantMemory = async () => {
+    await api.delete('/assistant/memory');
+};
+
+export const deleteAssistantNote = async (noteId: string) => {
+    await api.delete(`/assistant/memory/notes/${noteId}`);
+};
+
 /** The card's Save button — or Undo, with the `undo` a change or removal came back with */
 export const confirmProposal = async (proposal: Proposal | NonNullable<Saved['undo']>): Promise<Saved> => {
     const { data } = await api.post<{ data: Saved }>('/assistant/confirm', { proposal });
